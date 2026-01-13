@@ -20,24 +20,16 @@ int** make_array(int rows, int cols);
 int   update(info_t* info);
 int   unif_rand(int lower, int upper);
 void free_info(info_t* info);
+void simulate(info_t* info);
 
 int main(int argc, char* argv[]) {
   // parse the arguments
   info_t* info = parse_args(argc, argv); 
 
   // simulate
-  int changes = 1;
-  for(int iter = 0; iter < info->maxIters && changes > 0; iter++) {
-    if (info->freq > 0 && iter % info->freq == 0) {
-      printf("count: %d\n", iter);
-      disp_mat(info);
-    }
-    changes = update(info);
-  }
+  simulate(info);
 
-  printf("final\n");
-  disp_mat(info);
-
+  // free memory
   free_info(info);
 
   return 0;
@@ -184,5 +176,17 @@ int   unif_rand(int lower, int upper) {
   return (int) ( (upper/2.0 - lower/2.0 + 1.0) * ((double) rand()/(RAND_MAX+1.0)) ) + lower/2;
 }
 
+void simulate(info_t* info) {
+  int changes = 1;
+  for(int iter = 0; iter < info->maxIters && changes > 0; iter++) {
+    if (info->freq > 0 && iter % info->freq == 0) {
+      printf("count: %d\n", iter);
+      disp_mat(info);
+    }
+    changes = update(info);
+  }
 
+  printf("final\n");
+  disp_mat(info);
+}
 
