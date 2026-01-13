@@ -7,7 +7,7 @@
   a. Read the file that's in the format:
     i. Header (ints): rows cols inputSize
     ii. Subsequent rows: X Y Z
-    iii. Where (X, Y) are the (col, row) pair; and Z is the value at that location
+    iii. Where (X, Y) are the (row, col) pair; and Z is the value at that location
 3. Simulate for the requisite iterations or until the stopping condition is met
   a. Update the matrix
   b. Display the matrix according to the frequency
