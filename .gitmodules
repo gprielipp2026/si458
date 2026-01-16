@@ -1,0 +1,3 @@
+[submodule "hpc-lib"]
+	path = hpc-lib
+	url = git@github.com:gprielipp2026/hpc-lib.git
