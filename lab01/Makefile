@@ -1,7 +1,7 @@
 CC=gcc
 CFLAGS=-g -Wall -finstrument-functions 
 
-LDFLAGS=-L/usr/local/include/hpc-lib/timing/ -rdynamic
+LDFLAGS=-L/usr/local/include/hpc-lib/ -rdynamic
 LDLIBS=-lhpc 
 
 SRCS=$(wildcard *.c)
