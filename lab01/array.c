@@ -5,6 +5,8 @@
 #include <stdint.h>
 #include <string.h>
 
+#include <hpc-lib/timing/timing.h>
+
 typedef struct {
   int threshold;
   int maxIters;
@@ -26,6 +28,13 @@ int main(int argc, char* argv[]) {
   // parse the arguments
   info_t* info = parse_args(argc, argv); 
 
+  printf("threshold: %d\n", info->threshold);
+  printf("max iters: %d\n", info->maxIters);
+  printf("rows: %d\n", info->rows);
+  printf("cols: %d\n", info->cols);
+  printf("freq: %d\n", info->freq);
+  disp_mat(info);
+
   // simulate
   simulate(info);
 
@@ -42,7 +51,7 @@ uint64_t get_time_ms() {
   return (((uint64_t)tv.tv_sec)*1000) + (tv.tv_usec/1000);
 }
 
-void parse_file(char* path, int** mat, int* rows, int* cols) {
+void parse_file(char* path, int*** mat, int* rows, int* cols) {
     // parse the file into mat
     FILE* file = fopen(path, "r");
 
@@ -56,11 +65,11 @@ void parse_file(char* path, int** mat, int* rows, int* cols) {
     fscanf(file, "%d %d %d",  rows, cols, &inputSize);
     // read the remaining rows
     // they are formatted in: row col value
-    mat = make_array(*rows, *cols);
+    *mat = make_array(*rows, *cols);
     while(inputSize--) {
       int row, col, val;
       fscanf(file, "%d %d %d", &row, &col, &val);
-      mat[row][col] = val;
+      (*mat)[row][col] = val;
     }
 }
 
@@ -92,7 +101,7 @@ info_t* parse_args(int argc, char* argv[]) {
     fgets(path, sizeof(path), stdin);
     path[strlen(path)-1] = '\0'; // remove the newline
 
-    parse_file(path, mat, &rows, &cols); 
+    parse_file(path, &mat, &rows, &cols); 
   }
 
   // seed random (if seed > 0)
