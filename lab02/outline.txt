@@ -1,0 +1,22 @@
+# Lab02 - George Prielipp (265112)
+
+## Outline
+
+1. Parse the arguments into a struct
+  1. Required in argv: <# gens to simulate> <freq of grid display>
+  2. Optional: <seed for rand> <rows (N)> <cols (M)>
+    1. If not in argv, get file from stdin
+2. Create the matrix (N+2)x(M+2)
+3. Initialize matrix
+  1. from txt file: 
+    1. N M InputSize
+    2. X Y
+  2. all args used:
+    1. every entry = rand() % 2
+4. Run the simulation:
+  1. update the halo
+  2. update the grid:
+    1. Any live cell with two or three neighbors survives.
+    2. Any dead cell with three live neighbors becomes a live cell.
+    3. All other live cells die in the next generation. Similarly, all other dead cells stay dead.
+
