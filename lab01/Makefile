@@ -1,4 +1,5 @@
 CC=gcc
+
 CFLAGS=-g -Wall -finstrument-functions 
 
 LDFLAGS=-L/usr/local/include/hpc-lib/ -rdynamic

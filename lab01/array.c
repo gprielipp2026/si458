@@ -38,9 +38,9 @@ int main(int argc, char* argv[]) {
   // simulate
   simulate(info);
 
-  // free memory
-  free_info(info);
-
+  // free memory 
+  free_info(info); 
+ 
   return 0;
 }
 
