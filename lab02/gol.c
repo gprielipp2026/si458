@@ -54,6 +54,7 @@ typedef struct {
 } pos_t;
 
 
+__attribute__((no_instrument_function))
 uint64_t get_time_ms() {
   // this came from https://stackoverflow.com/questions/10192903/time-in-milliseconds-in-c
   struct timeval tv;
@@ -61,25 +62,28 @@ uint64_t get_time_ms() {
   return (((uint64_t)tv.tv_sec)*1000) + (tv.tv_usec/1000);
 }
 
-pos_t pindex(info_t* info, int x, int y) {
+__attribute__((no_instrument_function))
+pos_t pindex(int x, int y) {
   return (pos_t){ x + 1, y + 1 };
 }
 
 
+__attribute__((no_instrument_function))
 void  disp_mat(info_t* info) {
   for(int row = 0; row < info->rows; row++) {
     for(int col = 0; col < info->cols; col++) {
-      pos_t pos = pindex(info, col, row);
+      pos_t pos = pindex(col, row);
       printf("%d ", info->mat[pos.y][pos.x]);
     }
     printf("\n");
   }
 }
 
+__attribute__((no_instrument_function))
 void make_array(info_t* info, bool useRand) {
   // create it as [rows] x [cols]
 
-  info->mat = malloc(sizeof(int)*(info->rows+2));
+  info->mat = malloc(sizeof(int*)*(info->rows+2));
   for(int row = 0; row < info->rows+2; row++) {
     info->mat[row] = malloc(sizeof(int)*(info->cols+2));
     for(int col = 0; col < info->cols+2; col++) {
@@ -89,6 +93,7 @@ void make_array(info_t* info, bool useRand) {
   }
 }
 
+__attribute__((no_instrument_function))
 void parse_file(char* path, info_t* info) {
   FILE* file = fopen(path, "r");
 
@@ -107,11 +112,14 @@ void parse_file(char* path, info_t* info) {
     while(inputSize--) {
       int row, col;
       fscanf(file, "%d %d", &row, &col);
-      pos_t pos = pindex(row, col);
+      pos_t pos = pindex(col, row);
       info->mat[pos.y][pos.x] = 1;
     }
+
+  fclose(file);
 }
 
+__attribute__((no_instrument_function))
 info_t* parse_args(int argc, char* argv[]) {
   if(argc != 3 && argc != 6) {
     fprintf(stderr, "usage: %s <# generations> <display frequency> <?rand seed> <?rows> <?cols>\n", argv[0]);
@@ -124,7 +132,11 @@ info_t* parse_args(int argc, char* argv[]) {
   info->freq = atoi(argv[2]);
 
   if(argc == 6) {
-    srand(atoi(argv[3]));
+    int seed = atoi(argv[3]);
+
+    if(seed < 0) srand(get_time_ms());
+    else srand(seed);
+
     info->rows = atoi(argv[4]);
     info->cols = atoi(argv[5]);
     make_array(info, true);
@@ -141,6 +153,7 @@ info_t* parse_args(int argc, char* argv[]) {
 
 // --------------------------- simulation ---------------------------
 
+__attribute__((no_instrument_function))
 void update_halo(info_t* info) {
  // this is going to be inefficient at first
  
@@ -157,15 +170,15 @@ void update_halo(info_t* info) {
  }
 }
 
-int count_neighbors(info_t* info, int x, int y) {
-  pos_t pos = pindex(info, x, y);
+int count_neighbors(int** mat, int x, int y) {
+  pos_t pos = pindex(x, y);
 
   int count = 0;
   for(int yoff = -1; yoff <= 1; yoff++) {
     for(int xoff = -1; xoff <= 1; xoff++) {
       if(yoff == 0 && xoff == 0) continue;
       // also highly memory inefficient
-      count += info->mat[pos.y + yoff][pos.x + xoff];
+      count += mat[pos.y + yoff][pos.x + xoff];
     }
   }
 
@@ -175,19 +188,32 @@ int count_neighbors(info_t* info, int x, int y) {
 void update(info_t* info) {
   update_halo(info);
 
+  // make a copy of the matrix
+  int** copy = malloc(sizeof(int*)*(info->rows+2));
+  for(int row = 0; row < info->rows+2; row++) {
+    copy[row] = malloc(sizeof(int)*(info->cols+2));
+    memcpy(copy[row], info->mat[row], sizeof(int)*(info->cols+2));
+  }
+
   for(int row = 0; row < info->rows; row++) {
     for(int col = 0; col < info->cols; col++) {
-      int count = count_neighbors(info, col, row);
-      pos_t pos = pindex(info, col, row);
-      bool alive = info->mat[pos.y][pos.x];
+      int count = count_neighbors(copy, col, row);
+      pos_t pos = pindex(col, row);
+      bool alive = copy[pos.y][pos.x];
       
-      if(! (alive && (count == 2 || count == 3)) ) info->mat[pos.y][pos.x] = 0;
+      if(alive && (count == 2 || count == 3)) info->mat[pos.y][pos.x] = 1;
       else if(!alive && count == 3) info->mat[pos.y][pos.x] = 1;
       else info->mat[pos.y][pos.x] = 0;
     }
   }
+
+  for(int row = 0; row < info->rows+2; row++) {
+    free(copy[row]);
+  }
+  free(copy);
 }
 
+__attribute__((no_instrument_function))
 void simulate(info_t* info) {
   for(int gen = 0; gen < info->gens; gen++) {
     if(info->freq > 0 && gen % info->freq == 0) {
@@ -205,6 +231,7 @@ void simulate(info_t* info) {
 
 // ------------------------------- end simulation -------------------------
 
+__attribute__((no_instrument_function))
 void free_info(info_t* info) {
   // free mat
   if(info == NULL) return;
