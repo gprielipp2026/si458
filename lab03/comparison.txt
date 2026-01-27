@@ -1,0 +1,21 @@
+Times (can only run in valgrind so they're quite inflated):
+  -  256:  0.299s
+  -  512:  2.375s
+  - 1024: 19.431s
+
+Bytes (of each matrix):
+  -  256:    65,536
+  -  512:   262,144
+  - 1024: 1,048,576
+
+Ratios:
+  Times:
+    - 256 ->  512: 7.943
+    - 512 -> 1024: 8.181
+  Bytes:
+    - 256 ->  512: 4
+    - 512 -> 1024: 4
+
+There is such a large jump in times because the number of bytes of each matrix grows quadratically.
+
+

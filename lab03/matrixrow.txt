@@ -1,0 +1,24 @@
+_mm_setzero_ps():
+  - creates a 128 bit value and sets it to 0 (we're using 32 bit numbers, so it's like an array of 4)
+  - essentially [0, 0, 0, 0] 
+
+_mm_broadcast_ss(&A->data[row][k]):
+  - takes the value at A->data[row][k] and copies it 4 times (because of the bit thing mentioned above)
+  - essentially: [ A[row][k], A[row][k], A[row][k], A[row][k] ]
+
+_mm_load_ps(&B->data[k][col]):
+  - load 128 bits of memory (the 4 closest numbers located at (k, col))
+  - essentially: [ B[k][col], B[k][col+1], B[k][col+2], B[k][col+3] ]
+
+_mm_mul_ps(vrow, vcol):
+  - multiply the two vectors:
+  - result: 
+    [ A[row][k] * B[k][col], A[row][k] * B[k][col+1], A[row][k] * B[k][col+2], A[row][k] * B[k][col+3]]
+  - this is doing more of one spot's calculation all at once
+
+_mm_add_ps(spotSum, vres):
+  - performs the additions required to calculate the matrix multiplication
+  - accumulates the different portions of the spot's value
+
+_mm_store_ps(&C->data[row][col], spotSum):
+  - puts the resulting 4 calculations in C starting at [row][col]

@@ -1,0 +1,6 @@
+The same thing is happening as in matrixrow.c, except that the order of things had to be switched up slightly.
+Since the matrices are in col form now,
+the "vcol" is coming from A. And must be brought in using _mm_load_ps, instead of _mm_broadcast_ss.
+Similarily, since "vrow" is now coming from B, it must be brought in using _mm_broadcast_ss, instead of _mm_load_ps.
+
+That is the only change that was required (besides a little for loop restructuring).
