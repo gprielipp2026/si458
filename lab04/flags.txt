@@ -1,0 +1,17 @@
+1. Summary for each flag:
+  1. What it represents
+  2. How it can be used
+
+avx: avx, avx2, avx_vnni
+avx is a set of SIMD instructions that can do math on 8 32-bit floats or 4
+64-bit doubles simultaneously. avx2 expands this to include integers.
+avx_vnni (avx vector neural network instructions) adds extra
+instructions for 512-bit vectors.
+
+sse: sse, sse2, sse4_1, sse4_1, ssse3
+
+
+mmx: mmx
+
+
+fpu:
