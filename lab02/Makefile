@@ -1,6 +1,6 @@
 CC=gcc
 
-CFLAGS=-g -Wall -finstrument-functions 
+CFLAGS=-g -Wall -finstrument-functions  -I../hpc-lib/
 
 LDFLAGS=-L../hpc-lib/ -rdynamic
 LDLIBS=-lhpc 

@@ -167,14 +167,17 @@ void print(data_t* data)
     pthread_barrier_wait(&bwork);
 
   }
-  printf("\nfinal\n----------------------------------\n");
-  for(int col = 0; col < data->cols; col++) {
-    for(int row = 0; row < data->rows; row++) {
-      printf("%d ", data->mat[col][row]);
+
+  if(data->info->verbosity != 3) {
+    printf("\nfinal\n----------------------------------\n");
+    for(int col = 0; col < data->cols; col++) {
+      for(int row = 0; row < data->rows; row++) {
+        printf("%d ", data->mat[col][row]);
+      }
+      printf("\n");
     }
-    printf("\n");
+    printf("----------------------------------\n");
   }
-  printf("----------------------------------\n");
 
 }
 
@@ -381,11 +384,11 @@ void manage_threads(info_t* info, data_t* data)
   timing.end = clock();
 
   // print if verbose
-  if(info->verbosity == 2) {
+  if(info->verbosity >= 2) {
     clock_t diff = timing.end - timing.start;
-    float millis = diff / CLOCKS_PER_SEC * 1000.0;
+    float millis = diff * 1000.0 / CLOCKS_PER_SEC;
     int sec = (int) millis / 1000;
-    millis = millis - sec * 1000;
+    millis = millis - (float)(sec * 1000);
 
     printf("Time: %d sec %.1f millisec\n", sec, millis);
   }
