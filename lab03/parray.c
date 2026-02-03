@@ -76,6 +76,7 @@ typedef struct {
   
   int countDone;  
   int curIter;
+  bool cond;
 
   int rows, cols;
   int** mat;
@@ -140,14 +141,12 @@ int unif_rand(int x) {
 // threaded function (only main going to run this; ie - not really "threaded")
 void print(data_t* data)
 {
-  bool cond = true;
-  while(cond) {
+  while(!data->cond) {
     // update the condition after everyone has done work 
-    sem_wait(&mutex);
-    cond = data->countDone < data->info->threads && data->curIter < data->info->max_iters; 
-    sem_post(&mutex);
+    // safe to write because of the barriers
+    data->cond = data->countDone == data->info->threads || data->curIter == data->info->max_iters; 
 
-    if(!cond) break; // there is probably a better way to do this
+    if(data->cond) break; // there is probably a better way to do this
 
     pthread_barrier_wait(&bprint); // wait for everyone so I can do work
     
@@ -188,15 +187,10 @@ void* simulate(void* arg)
   data_t* data = tinfo->data;
 
   bool done = false;
-  bool cond = true;
-  while(cond) {
+  while(!data->cond) {
     // print increases the curIter (don't have to worry about it)
     pthread_barrier_wait(&bprint); 
     pthread_barrier_wait(&bwork);
-
-    sem_wait(&mutex);
-    cond = data->countDone < data->info->threads; 
-    sem_post(&mutex);
 
     if(!done) {
       // update the matrix
@@ -325,7 +319,8 @@ data_t* initialize(info_t* info)
 
   data->info      = info;
   data->countDone = 0;  
-  data->curIter   = 0;  
+  data->curIter   = 0;
+  data->cond = false;  
 
   sem_init(&mutex, 0, 1);
   pthread_barrier_init(&bprint, NULL, data->info->threads + 1);
