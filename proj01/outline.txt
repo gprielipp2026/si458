@@ -1,0 +1,29 @@
+1. Read the arguments
+    1. <generations> <display frequency> <threads> <verbosity>
+    2. verbosity=2 => timing; verbosity > 0 => thread info
+        1. timing:          Time: x sec x.x millisec
+        2. thread info:     tid x   columns:    a:b     (col width)
+2. Initialize the grid
+    1. num rows: (input)
+    2. if =0 => from file
+        1. N M InputSize
+        2. Col Row
+    3. else num cols: (input)
+    4. seed: (input)
+        1. Grid[X][Y] = rand() % 2
+    5. Make sure each thread has extra space for its "halo" when initializing
+3. Initialize all threads with necessary information and tasks divided
+4. Simulate (update the grid)
+    1. let the printing thread do work
+    2. wait for printing to be done
+    3. update the halo's
+        1. Threads will be reading other thread's edge columns of a grid that will not be changing (no issues)
+    4. update the inactive grid ("write only")
+        1. Any live cell with two or three neighbors survives.
+        2. Any dead cell with three live neighbors becomes a live cell.
+        3. All other live cells die in the next generation. Similarly, all other dead cells stay dead.
+    5. wait for all working threads to be done with one iteration
+    6. swap pointers to active ("read only") grid
+    7. repeat
+5. Join all the threads
+6. Clean up all memory
