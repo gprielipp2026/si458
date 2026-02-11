@@ -69,7 +69,7 @@ int main(int argc, char* argv[]) {
     free_gol(gol);
 
     time_diff(&tinfo);
-    time_print(&tinfo);
+    if(args->verb >= 2) time_print(&tinfo);
 
     return 0;
 }
@@ -79,7 +79,7 @@ int main(int argc, char* argv[]) {
 typedef struct {
     int X, Y;
 } pos_t;
-inline pos_t ind(int x, int y) 
+pos_t ind(int x, int y) 
 {
     return (pos_t){.X = x+1, .Y = y+1};
 }
@@ -112,6 +112,8 @@ void init_mat(gol_t* gol)
 
 void rand_mat(gol_t* gol) 
 {
+    init_mat(gol);
+
     srand(gol->args->seed);
     for(int col = 0; col < gol->args->cols; col++) 
     {
@@ -123,22 +125,29 @@ void rand_mat(gol_t* gol)
     }
 }
 
-void file_mat(gol_t* gol) 
+int file_mat(gol_t* gol) 
 {
     FILE* file = fopen(gol->args->filename, "r");
+    
+    if(!file) return 1;
 
     int N;
     fscanf(file, "%d %d %d", &gol->args->cols, &gol->args->rows, &N);
+    
+    init_mat(gol);
+    
 
     int x, y;
     while(N--) 
     {
-        fscanf(file, "%d %d", &x, &y);
+        fscanf(file, "%d %d", &y, &x);
         pos_t pos = ind(x, y);
         gol->write[pos.X][pos.Y] = 1;
     }
 
     fclose(file);
+
+    return 0;
 }
 
 void swap(gol_t* gol) 
@@ -191,24 +200,46 @@ void disp_grid(gol_t* gol)
         // update the halo
         update_halo(gol);
 
-        // print if need be
+        // print if need be+1
         if(gol->args->freq > 0 && i % gol->args->freq == 0) 
         {
+            printf("\n%d:\n--------------------------------------------------\n", i);
             for(int row = 0; row < gol->args->rows; row++) 
             {
                 for(int col = 0; col < gol->args->cols; col++) 
                 {
                     pos_t pos = ind(col, row);
-                    printf("%s ", gol->read[pos.X][pos.Y] ? "\u2b1c" : "\u2b1b");
+                    // for fun
+                    // printf("%s", gol->read[pos.X][pos.Y] == 1 ? "\u2b1b" : "\u2b1c");
+                    printf("%d ", gol->read[pos.X][pos.Y]);
                 }
+                printf("\n");
             }
+            printf("--------------------------------------------------\n");
         }
 
         pthread_barrier_wait(&bwork);
     }
+
+    if(gol->args->verb != 3)
+    {
+        printf("\nfinal:\n--------------------------------------------------\n");
+        for(int row = 0; row < gol->args->rows; row++) 
+        {
+            for(int col = 0; col < gol->args->cols; col++) 
+            {
+                pos_t pos = ind(col, row);
+                // for fun
+                // printf("%s", gol->read[pos.X][pos.Y] ? "\u2b1b" : "\u2b1c");
+                printf("%d ", gol->read[pos.X][pos.Y]);
+            }
+            printf("\n");
+        }
+        printf("--------------------------------------------------\n");
+    }
 }
 // pthread
-void worker(void* arg) 
+void* worker(void* arg) 
 {
     thread_t* thread = (thread_t*)arg;
     gol_t* gol = (gol_t*) thread->gol;
@@ -228,6 +259,7 @@ void worker(void* arg)
             }
         }
     }
+    pthread_exit(0);
 }
 
 // public
@@ -251,31 +283,138 @@ void time_diff(tinfo_t* tinfo)
     tinfo->cdiff.us -= 1000 * tinfo->cdiff.s;
 
     // wall time
-    
+    tinfo->wdiff.us  = tinfo->wend.tv_usec - tinfo->wstart.tv_usec;
+    tinfo->wdiff.s   = tinfo->wend.tv_sec  - tinfo->wstart.tv_sec + (tinfo->wdiff.us > 1000000);
+    tinfo->wdiff.us -= (tinfo->wdiff.us > 1000000) ? 1000000 : 0;
 }
 
 void time_print(tinfo_t* tinfo)
 {
-
+    printf("cpu    Time: %3d sec %6d millisec\n", tinfo->cdiff.s, tinfo->cdiff.us);
+    printf("wall   Time: %3d sec %6d microsec\n", tinfo->wdiff.s, tinfo->wdiff.us);
 }
 
 args_t* parse_args(int argc, char* argv[])
 {
+    if(argc != 5) 
+    {
+        printf("usage: %s <generations> <display frequency> <threads> <verbosity>\n", argv[0]);
+        exit(1);
+    }
 
+    args_t* args = malloc(sizeof(*args));
+
+    args->gens = atoi(argv[1]);
+    args->freq = atoi(argv[2]);
+    args->threads = atoi(argv[3]);
+    if(args->threads < 1) args->threads = 1; // just overwrite that
+
+    args->verb = atoi(argv[4]);
+
+    printf("num rows: ");
+    scanf("%d%*c", &args->rows);
+
+    if(args->rows > 0) 
+    {
+        printf("num cols: ");
+        scanf("%d%*c", &args->cols);
+        printf("seed: ");
+        scanf("%d%*c", &args->seed);
+    }
+    else 
+    {
+        args->useFn = true;
+        args->seed = time(NULL);
+        args->filename = malloc(sizeof(char)*100);
+        printf("filename: ");
+        fgets(args->filename, sizeof(char)*100, stdin);
+        args->filename[strlen(args->filename)-1] = '\0';
+    }
+
+    return args;
 }
 
 gol_t* init_gol(args_t* args)
 {
+    gol_t* gol = malloc(sizeof(*gol));
 
+    gol->args = args;
+
+    if(args->useFn) 
+    {
+        if( file_mat(gol) )
+        {
+            free_gol(gol);
+            printf("Error opening '%s'\n", args->filename);
+            exit(1);
+        }
+    }
+    else rand_mat(gol);
+
+    return gol;
 }
 
 void simulate(gol_t* gol)
 {
+    pthread_barrier_init(&bprint, NULL, gol->args->threads+1);
+    pthread_barrier_init(&bwork, NULL, gol->args->threads+1);
 
+    pthread_t tids[gol->args->threads];
+    thread_t targs[gol->args->threads];
+
+    int perT = gol->args->cols / gol->args->threads, 
+    rem = gol->args->cols % gol->args->threads;
+    int start = 0, 
+        end;
+    // create the threads
+    for(int t = 0; t < gol->args->threads; t++)
+    {
+        end = start + perT + (rem-- > 0);
+        targs[t] = (thread_t){
+            .start = start,
+            .end   = end,
+            .id    = t,
+            .gol   = gol
+        };
+        
+        if(gol->args->verb > 0) 
+        {
+            printf("tid %d\tcolumns:\t%d:%d\t(%d)\n", t, start, end, end-start);
+        }
+        
+        pthread_create(&tids[t], NULL, worker, (void*)&targs[t]);
+        
+        start = end;
+    }
+
+    // set main thread to do work
+    disp_grid(gol);
+
+    // join the threads
+    for(int t = 0; t < gol->args->threads; t++)
+    {
+        pthread_join(tids[t], NULL);
+    }
+
+    pthread_barrier_destroy(&bprint);
+    pthread_barrier_destroy(&bwork);
 }
 
 void free_gol(gol_t* gol)
 {
+    if(gol->read != NULL)
+    {
+        for(int col = 0; col < gol->args->cols+2; col++)
+        {
+            free(gol->read[col]);
+            free(gol->write[col]);
+        }
+        free(gol->read);
+        free(gol->write);
+    }
 
+    if(gol->args->useFn) free(gol->args->filename);
+    free(gol->args);
+    free(gol);
 }
 
