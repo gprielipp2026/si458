@@ -1,0 +1,6 @@
+Part 1
+1. Swap the pthreads calls for omp calls
+
+Part 2
+1. Put a parallel for where I am simulating. Cannot do the generations
+because GOL is sequential.
