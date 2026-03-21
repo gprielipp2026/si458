@@ -1,0 +1,59 @@
+1. parse arguments
+  1. mpigol <gens> <freq> <verb>
+  2. verb = 2 => timing| Time: x.xx sec
+  3. freq = 0 => no printing
+  4. verb > 0 => thread info| tid x  columns:   a:b  (col width)
+
+2. parse inputs
+  1. num rows: <+# or 0>
+    1.  0 => filename: <filename>
+    2. +# => num cols: +#
+          => seed: #
+      1. seed < 0 => srand(time(null))
+
+3. initialize grid in rank 0
+  * pad grid to 512-bit increments
+  * add in extra columns / rows for halo
+  1. Randomly
+    1. use seed
+  2. From File
+    1. format:
+      <cols> <rows> <entries>
+      <col> <row>
+      ...
+      <col> <row> 
+
+4. partition MPI nodes evenly width-wise across the grid
+  1. calculate each set of partner pairs as the node to the left, and the one to right (wrapping around the cirlce)
+  2. rank 0 distributes chunks of the grid
+
+5. partition threads in each MPI node to handle blocks of the grid
+  1. align threads to 512-bit rows
+    * means each thread can handle 256 row entries
+
+6. start the simulation (loop over all generations)
+  1. synchronize all nodes and threads for printing
+    1. update halo
+      1. threads can safely alter horizontal halo w/o blocking
+      2. peer nodes need to share vertical halo edges (MPI communication)
+    2. swap the read / write grids before printing
+    3. print the grid
+      * (emailed Dr. Knoll about this)
+      ?1. synchronize threads left to right, top to bottom (as needed)
+       2. print left to right.
+       3. when node hits end of column, request the next node to begin printing
+       4. keep going around the circle until all nodes have printed the first row, then increment the row until the whole grid is printed
+  2. synchronize all nodes and threads for working
+    1. update the write grid based on the read grid
+      ** Count Neighbors Change (512-bit vectorization)
+        - rolling window requires 1 extra 512-bit numbers
+        - perform left + middle + right -> sum
+        - count_neighbors = sum_top + sum_middle + sum_bottom - isAlive
+      1. for each 512-bit column,
+        1. count_neighbors for column
+        2. go down each row and update the grid according the GOL rules
+          1. Any live cell with 2 or 3 neighbors survives
+          2. Any dead cell with 3 live neighbors becomes a live cell
+          3. Any cell that doesn't meet the above criteria is dead
+
+7. clean up all memory
