@@ -3,10 +3,10 @@
 
 #include <stdio.h>
 #include <stdlib.h>
-#include <stdbool.h>
-#include <pthread.h>
-#include <time.h>
-#include <sys/time.h>
+#include <stdbool.h> 
+#include <pthread.h> 
+#include <time.h> 
+#include <sys/time.h> 
 #include <string.h>
 #include <semaphore.h>
 
@@ -66,10 +66,10 @@ int main(int argc, char* argv[]) {
     simulate(gol);
     time_stop(&tinfo);
 
-    free_gol(gol);
-
     time_diff(&tinfo);
     if(args->verb >= 2) time_print(&tinfo);
+    
+    free_gol(gol);
 
     return 0;
 }
@@ -221,7 +221,7 @@ void disp_grid(gol_t* gol)
         pthread_barrier_wait(&bwork);
     }
 
-    if(gol->args->verb != 3)
+    if(gol->args->freq > 0)
     {
         printf("\nfinal:\n--------------------------------------------------\n");
         for(int row = 0; row < gol->args->rows; row++) 
@@ -290,8 +290,8 @@ void time_diff(tinfo_t* tinfo)
 
 void time_print(tinfo_t* tinfo)
 {
-    printf("cpu    Time: %3d sec %6d millisec\n", tinfo->cdiff.s, tinfo->cdiff.us);
-    printf("wall   Time: %3d sec %6d microsec\n", tinfo->wdiff.s, tinfo->wdiff.us);
+    printf("cpu    Time: %4.6f sec\n", tinfo->cdiff.s + (float)tinfo->cdiff.us/1000.0);
+    printf("wall   Time: %4.6f sec\n", tinfo->wdiff.s + (float)tinfo->wdiff.us/1000000.0);
 }
 
 args_t* parse_args(int argc, char* argv[])
@@ -377,7 +377,7 @@ void simulate(gol_t* gol)
             .gol   = gol
         };
         
-        if(gol->args->verb > 0) 
+        if(gol->args->verb > 0 && gol->args->verb != 3) 
         {
             printf("tid %d\tcolumns:\t%d:%d\t(%d)\n", t, start, end, end-start);
         }

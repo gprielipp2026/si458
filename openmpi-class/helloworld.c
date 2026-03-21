@@ -28,7 +28,7 @@ int main()
     sprintf(greeting, "hello from %d of %d\n", my_rank, comm_sz);
 
     //      content,   length,               type,    dest, send_tag, community
-    MPI_send(greeting, strlen(greeting) + 1, MPI_CHAR, 0,   0,         MPI_COMM_WORLD);
+    MPI_Send(greeting, strlen(greeting) + 1, MPI_CHAR, 0,   0,         MPI_COMM_WORLD);
   } else {
     // print my own message to screen:
     printf("I am from process 0!\n");
