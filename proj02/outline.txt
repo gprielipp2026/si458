@@ -10,39 +10,42 @@
     2. +# => num cols: +#
           => seed: #
       1. seed < 0 => srand(time(null))
+ 
+3. partition MPI nodes evenly width-wise across the grid
+  1. calculate each set of partner pairs as the node to the left, and the one to right (wrapping around the cirlce)
 
-3. initialize grid in rank 0
+4. broadcast arguments and input (parameters) to all nodes
+
+5. initialize grid in rank 0
   * pad grid to 512-bit increments
   * add in extra columns / rows for halo
   1. Randomly
-    1. use seed
+    1. use seed * (rank + 2026)
   2. From File
+    * each node can read from the file
     1. format:
       <cols> <rows> <entries>
       <col> <row>
       ...
       <col> <row> 
 
-4. partition MPI nodes evenly width-wise across the grid
-  1. calculate each set of partner pairs as the node to the left, and the one to right (wrapping around the cirlce)
-  2. rank 0 distributes chunks of the grid
-
-5. partition threads in each MPI node to handle blocks of the grid
+6. partition threads in each MPI node to handle blocks of the grid
   1. align threads to 512-bit rows
     * means each thread can handle 256 row entries
 
-6. start the simulation (loop over all generations)
+7. start the simulation (loop over all generations)
   1. synchronize all nodes and threads for printing
+    - MPI_Barrier & #pragma omp barrier
     1. update halo
       1. threads can safely alter horizontal halo w/o blocking
       2. peer nodes need to share vertical halo edges (MPI communication)
     2. swap the read / write grids before printing
-    3. print the grid
-      * (emailed Dr. Knoll about this)
-      ?1. synchronize threads left to right, top to bottom (as needed)
-       2. print left to right.
-       3. when node hits end of column, request the next node to begin printing
-       4. keep going around the circle until all nodes have printed the first row, then increment the row until the whole grid is printed
+    3. print the grid (rank 0)
+      1. request the all nodes to send compacted data of the current row
+        - MPI_Gather(...)
+        - pack data into smallest 8-bit aligned array where each bit is one cell 
+      2. loop over the data to print the row.
+      3. continue through all rows
   2. synchronize all nodes and threads for working
     1. update the write grid based on the read grid
       ** Count Neighbors Change (512-bit vectorization)
@@ -56,4 +59,4 @@
           2. Any dead cell with 3 live neighbors becomes a live cell
           3. Any cell that doesn't meet the above criteria is dead
 
-7. clean up all memory
+8. clean up all memory
