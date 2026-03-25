@@ -150,6 +150,20 @@ TYPE** init_grid(int rows, int cols)
 
 }
 
+typedef struct {
+  uint8_t shift;
+  uint32_t block;
+  uint32_t col;
+} pos_t;
+
+pos_t get_pos(uint32_t row, uint32_t col)
+{
+  uint32_t block  = (row / sizeof(TYPE)) >> 3; // >> 3 multiplies sizeof(TYPE) by 8-bits per byte
+  uint32_t offset = (row % (sizeof(TYPE) << 2)); // need >> 1 (divide by 2) and multiply by 8-bits per byte
+
+  return (pos_t){.shift=offset<<1, .block=block, .col=col+1};
+}
+
 // public
 gol_t* send_file(param_t *params, char *filepath, uint8_t size)
 {
@@ -201,7 +215,21 @@ gol_t* receive_file(param_t *params, uint8_t rank)
 
 gol_t* randomize(param_t *params)
 {
+  gol_t* gol = malloc(sizeof(*gol));
+  gol->params = params;
+  gol->write = init_grid(params->rows, params->cols);
+  gol->read = init_grid(params->rows, params->cols);
 
+  for(uint32_t col = 0; col < params->cols; col++)
+  {
+    for(uint32_t row = 0; row < params->rows; row++)
+    {
+      pos_t pos = get_pos(row, col);
+      gol->write[pos.col][pos.block] |= (rand() % 2) << pos.shift;
+    }
+  }
+
+  return gol;
 }
 
 void swap(gol_t *gol)
@@ -282,7 +310,7 @@ gol_t* parse_args(int argc, char* argv[], uint8_t size)
   if(isRandom)
     return randomize(params);
   else
-  // communicate the file if I need to
+    // communicate the file if I need to
     return send_file(params, filepath);
 }
 
