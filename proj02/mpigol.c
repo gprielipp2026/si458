@@ -30,7 +30,7 @@ typedef struct {
  
   union {
     uint32_t seed;
-    char *filepath[128]; 
+    char *filepath[16]; 
   };
 
   gol_t* (*init_gol)(void*);

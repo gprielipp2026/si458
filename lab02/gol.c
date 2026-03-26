@@ -56,7 +56,7 @@ typedef struct {
 } pos_t;
 
 
-NOTIMING
+__attribute__ ((no_instrument_function))
 uint64_t get_time_ms() {
   // this came from https://stackoverflow.com/questions/10192903/time-in-milliseconds-in-c
   struct timeval tv;
@@ -64,13 +64,13 @@ uint64_t get_time_ms() {
   return (((uint64_t)tv.tv_sec)*1000) + (tv.tv_usec/1000);
 }
 
-NOTIMING
+__attribute__ ((no_instrument_function))
 pos_t pindex(int x, int y) {
   return (pos_t){ x + 1, y + 1 };
 }
 
 
-NOTIMING
+__attribute__ ((no_instrument_function))
 void  disp_mat(info_t* info) {
   for(int row = 0; row < info->rows; row++) {
     for(int col = 0; col < info->cols; col++) {
@@ -81,7 +81,7 @@ void  disp_mat(info_t* info) {
   }
 }
 
-NOTIMING
+__attribute__ ((no_instrument_function))
 void make_array(info_t* info, bool useRand) {
   // create it as [rows] x [cols]
 
@@ -95,7 +95,7 @@ void make_array(info_t* info, bool useRand) {
   }
 }
 
-NOTIMING
+__attribute__ ((no_instrument_function))
 void parse_file(char* path, info_t* info) {
   FILE* file = fopen(path, "r");
 
@@ -121,7 +121,7 @@ void parse_file(char* path, info_t* info) {
   fclose(file);
 }
 
-NOTIMING
+__attribute__ ((no_instrument_function))
 info_t* parse_args(int argc, char* argv[]) {
   if(argc != 3 && argc != 6) {
     fprintf(stderr, "usage: %s <# generations> <display frequency> <?rand seed> <?rows> <?cols>\n", argv[0]);
@@ -155,7 +155,7 @@ info_t* parse_args(int argc, char* argv[]) {
 
 // --------------------------- simulation ---------------------------
 
-NOTIMING
+__attribute__ ((no_instrument_function))
 void update_halo(info_t* info) {
  // this is going to be inefficient at first
  
@@ -216,7 +216,7 @@ void update(info_t* info) {
 }
 
 
-NOTIMING
+__attribute__ ((no_instrument_function))
 void simulate(info_t* info) {
   for(int gen = 0; gen < info->gens; gen++) {
     if(info->freq > 0 && gen % info->freq == 0) {
@@ -234,7 +234,7 @@ void simulate(info_t* info) {
 
 // ------------------------------- end simulation -------------------------
 
-NOTIMING
+__attribute__ ((no_instrument_function))
 void free_info(info_t* info) {
   // free mat
   if(info == NULL) return;
