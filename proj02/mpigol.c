@@ -161,7 +161,19 @@ int main(int argc, char* argv[])
 // private
 TYPE** init_grid(int rows, int cols)
 {
+  // would be more "efficient" to do both arrays at the same time. 
+  // but, this effectively runs in the same "time" (big-O time at least).
 
+  // make space for the halo (+2 all around)
+  int reduced_rows = (rows+2) / (sizeof(TYPE) / 2);
+  TYPE** grid = malloc(sizeof(TYPE*) * (cols+2));
+  
+  for(int col = 0; col < cols+2; col++)
+  {
+    grid[col] = calloc(reduced_rows, sizeof(TYPE));
+  }
+
+  return grid;
 }
 
 typedef struct {
@@ -328,11 +340,80 @@ gol_t* parse_args(int argc, char* argv[], uint8_t size)
     return send_file(params, filepath);
 }
 
-void free_params(params_t *params);
-void free_gol(gol_t *gol);
+void free_params(params_t *params)
+{
+  free(params);
+}
 
-void print(gol_t* gol);
-void simulate(gol_t* gol);
+void free_gol(gol_t *gol)
+{
+  for(int col = 0; col < gol->params->cols+2; col++)
+  {
+    free(gol->read[col]);
+    free(gol->write[col]);
+  }
+
+  free_params(gol->params);
+  free(gol->read);
+  free(gol->write);
+  free(gol);
+}
+
+void print(gol_t* gol)
+{
+
+
+  // signal that I am done printing
+# pragma omp barrier
+}
+
+void simulate(gol_t* gol)
+{
+
+# pragma omp parallel
+  {
+    int size = omp_get_num_threads();
+    int rank = omp_get_thread_num();
+
+    // define the block based on thread's # in the pool
+    uint32_t col_start = ...;
+    uint32_t row_start = ...;
+    uint32_t col_end = ...;
+    uint32_t row_end = ...;
+
+    // start the "game"
+    for(uint32_t gen = 0; gen < gol->params->gens; gen++)
+    {
+      // sync all of the threads for work
+#     pragma omp barrier
+
+      // update the halo
+      for(uint32_t col = col_start; col < col_end; col++)
+      {
+        pos_t top_row = get_pos(0, col);
+        pos_t bot_row = get_pos(gol->params->rows-1, col);
+
+        gol->write[
+      }
+
+
+      if(gol->params->freq > 0 && gen % gol->params->freq == 0) 
+      {
+        // printing needs to signal all threads when it's done with omp barrier
+        if(rank == 0) print(gol);
+        else 
+        {
+          // sync all threads for printing to be done
+#         pragma omp barrier
+        }
+      }
+
+      
+
+    } // end for
+  }// end parallel
+
+}// end simulate
 
 
 
