@@ -74,6 +74,8 @@ class InteractiveMandelbrot:
         self.p = p
 
         self.fig, self.ax = plt.subplots()
+        self.ax.set_xlim(0, w)
+        self.ax.set_ylim(0,h)
         plt.margins(0)
         plt.axis('off')
         plt.subplots_adjust(left=0, right=1, top=1, bottom=0)
