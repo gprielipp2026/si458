@@ -45,7 +45,7 @@ void mandelSet(uint8_t* array, const uint32_t w, const uint32_t h, double xmax, 
         }
        
         // debug 
-        printf("%2d/%2d: %dx%d   %4d - %4d    (%4d)\n", rank, size, w, h, ystart, yend, yend - ystart);
+        // printf("%2d/%2d: %dx%d   %4d - %4d    (%4d)\n", rank, size, w, h, ystart, yend, yend - ystart);
 
         for(uint32_t y = ystart; y < yend; y++) 
         {

@@ -1,14 +1,22 @@
 #!/usr/bin/env python3
 import sys
+import os
 from ctypes import *
 import numpy as np
 import matplotlib
 import matplotlib.pyplot as plt
 import matplotlib.patches as patches
+import subprocess
 
 matplotlib.use('TkAgg')
 
+def check_lib(file):
+    if not os.path.isfile(file):
+        subprocess.call('make')
+
 def mandelSet(w, h, xmax=1.0, xmin=-2.0, ymax=1.0, ymin=-1.0, p=1):
+    check_lib('./mandel.so')
+
     if p < 1:
         p = 1
     
@@ -32,6 +40,8 @@ def mandelSet(w, h, xmax=1.0, xmin=-2.0, ymax=1.0, ymin=-1.0, p=1):
     return array
     
 def cprintMandel(arr, w, h):
+    check_lib('./mandel.so')
+
     lib = CDLL('./mandel.so')
 
     func = lib.print
@@ -150,6 +160,8 @@ class InteractiveMandelbrot:
 
     def save(self):
         def handler(event):
+            os.makedirs('imgs', exist_ok=True)
+
             filename = f'imgs/{self.w}x{self.h}_({self.xmin} - {self.xmax})_({self.ymin} - {self.ymax}).png'
             event.canvas.figure.savefig(filename, bbox_inches='tight', dpi=300)
         return handler
