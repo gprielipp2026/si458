@@ -74,7 +74,13 @@ class InteractiveMandelbrot:
         self.p = p
 
         self.fig, self.ax = plt.subplots()
+        plt.margins(0)
+        plt.axis('off')
+        plt.subplots_adjust(left=0, right=1, top=1, bottom=0)
+
         self.img = self.rect = None
+        self.pressed = False
+        self.isZoom = self.isPan = False
         
         self.register()
 
@@ -92,10 +98,15 @@ class InteractiveMandelbrot:
     def update(self):
         array = mandelSet(self.w, self.h, xmax=self.xmax, xmin=self.xmin, ymax=self.ymax, ymin=self.ymin, p=self.p)
 
-        if self.img:
+        if self.img is not None:
             self.img.set_data(array)
         else:
             self.img = self.ax.imshow(array, cmap='gray')
+
+        if self.rect is not None:
+            # remove the rect before drawing a new one
+            self.rect.remove()
+            self.rect = None
 
         if self.drag_start and self.drag_end:
             # overlay the selected area with a faint red rectangle
@@ -103,12 +114,11 @@ class InteractiveMandelbrot:
             w, h = [e-s for s,e in zip(self.drag_start, self.drag_end)]
             self.rect = patches.Rectangle((x, y), w, h, facecolor='red', alpha=0.4)
             self.ax.add_patch(self.rect)
-        elif self.rect is not None:
-            # remove the rect when done
-            self.rect.remove()
-            self.rect = None
+        
+        plt.pause(0.01)
 
-    def screen_to_world(self, start, end):
+
+    def zoom(self, start, end):
         """
         start < end
         x = index 0
@@ -119,43 +129,71 @@ class InteractiveMandelbrot:
         self.ymin = linterp(start[1], 0, self.h, self.ymin, self.ymax) 
         self.ymax = linterp(  end[1], 0, self.h, self.ymin, self.ymax) 
     
+    def pan(self, start, end):
+        dx = start[0] / self.w - end[0] / self.w
+        dy = start[1] / self.h - end[1] / self.h
+
+        scale = min((self.ymax-self.ymin) / 4, (self.xmax-self.xmin) / 4)
+
+        dx *= scale
+        dy *= scale
+
+        self.xmin += dx
+        self.xmax += dx
+        self.ymin += dy
+        self.ymax += dy
+
+
     def on_press(self):
         def handler(event):
             if event.inaxes:
+                self.pressed = True
                 self.drag_start = self.drag_end = (event.xdata, event.ydata)
-                self.update()
+                if event.button == 1: 
+                    self.isZoom = True
+                    self.update()
+                elif event.button == 3:
+                    self.isPan = True
         return handler
 
     def on_move(self):
         def handler(event):
-            if event.inaxes:
+            if event.inaxes and self.pressed:
                 self.drag_end = (event.xdata, event.ydata)
 
-                if self.drag_start is not None and self.drag_end is not None:
+                if self.drag_start is not None and self.drag_end is not None and self.isZoom:
                     if any([e<s for s,e in zip(self.drag_start, self.drag_end)]):
                         self.drag_start, self.drag_end = self.drag_end, self.drag_start
 
-                self.update()
+                if self.isZoom:
+                    self.update()
         return handler
 
     def on_release(self):
         def handler(event):
             if event.inaxes:
-                self.drag_end = (event.xdata, event.ydata)
+                if self.isZoom:
+                    self.drag_end = (event.xdata, event.ydata)
 
-                if self.drag_start is not None and self.drag_end is not None:
-                    if any([s<e for s,e in zip(self.drag_start, self.drag_end)]):
-                        self.drag_start, self.drag_end = self.drag_end, self.drag_start
+                    if self.drag_start is not None and self.drag_end is not None:
+                        if any([s<e for s,e in zip(self.drag_start, self.drag_end)]):
+                            self.drag_start, self.drag_end = self.drag_end, self.drag_start
 
-                    self.screen_to_world(self.drag_start, self.drag_end)
+                        self.zoom(self.drag_start, self.drag_end)
+                
+                elif self.isPan:
+                    self.pan(self.drag_start, self.drag_end)
+
+                
+                print(self.xmin, self.xmax, self.ymin, self.ymax)
 
                 self.drag_start = self.drag_end = None
+                self.pressed = self.isZoom = self.isPan = False
                 self.update()
         return handler
 
     def start(self):
         self.update()
-        plt.title(f'{self.w}x{self.h} Mandelbrot')
         plt.show()
 
     def save(self):
