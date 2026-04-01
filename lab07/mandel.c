@@ -54,6 +54,18 @@ void mandelSet(uint8_t* array, uint32_t w, uint32_t h, double xmax, double xmin,
     }
 }
 
+void print(uint8_t *array, uint32_t w, uint32_t h)
+{
+  for(uint32_t y = 0; y < h; y++)
+  {
+    for(uint32_t x = 0; x < w; x++)
+    {
+      printf("%d", array[x + y * h]);// ? 0xf0c8:0x25a1);
+    }
+    printf("\n");
+  }
+}
+
 int main(int argc, char* argv[])
 {
     // should hhave a test here
@@ -62,6 +74,8 @@ int main(int argc, char* argv[])
     uint8_t* array = calloc(w*h, sizeof(uint8_t));
     
     mandelSet(array, w, h, xmax, xmin, ymax, ymin, p);
+
+    print(array, w, h);
 
     free(array);
 
