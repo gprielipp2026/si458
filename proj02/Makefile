@@ -1,6 +1,6 @@
 CC=gcc
 
-CFLAGS=-Wall 
+CFLAGS=-Wall -fopenmp
 
 LDFLAGS=
 LDLIBS=

@@ -15,8 +15,9 @@
 
 // data definitions
 typedef struct {
-  uint32_t rows, cols;
   uint32_t gens;
+  uint32_t rows, cols;
+  uint32_t lPartner, rPartner;
   uint8_t freq;
   uint8_t verb;  
 } params_t;
@@ -25,29 +26,11 @@ typedef struct {
   // not counting the halo
   // only "workable" cells
   params_t* params;
-
+  uint32_t my_rank;
+  uint32_t size;
   TYPE **read;
   TYPE **write;
 } gol_t;
-
-typedef struct {
-  uint32_t gens;
-  uint8_t freq;
-  uint8_t verb;  
-  uint32_t rows, cols;
- 
-  union {
-    uint32_t seed;
-    char *filepath[16]; 
-  };
-
-  gol_t* (*init_gol)(void*);
-} params_t;
-
-typedef struct {
-
-} timing_t;
-
 
 typedef struct {
   uint8_t dest;// allow up to 256 Nodes
@@ -60,14 +43,11 @@ MPI_Datatype MPI_INIT_INFO;
 
 // function declarations
 void swap(gol_t *gol);
-void start(timing_t *timing);
-void stop(timing_t *timing);
-void print_time(timing_t *timing);
 
-gol_t* parse_args(int argc, char* argv[]);
-gol_t* send_file(param_t *params, char *filepath);
-gol_t* receive_file(param_t *params);
-gol_t* randomize(param_t *params);
+gol_t* parse_args(int argc, char* argv[], uint32_t size);
+gol_t* send_file(params_t *params, char *filepath);
+gol_t* receive_file(params_t *params);
+gol_t* gol_randomize(params_t *params);
 void free_params(params_t *params);
 void free_gol(gol_t *gol);
 
@@ -80,11 +60,10 @@ uint8_t read(gol_t *gol, uint32_t row, uint32_t col);
 // main program
 int main(int argc, char* argv[])
 {
-  uint8_t rank, size, left, right;
+  uint32_t rank, size;
   
   params_t *params;
   gol_t *gol;
-  timing_t *timing; 
 
   /**
    * I caved and allowed Gemini to help me understand the documentation which
@@ -100,7 +79,7 @@ int main(int argc, char* argv[])
   // Create the MPI_PARAM_STRUCT type;                  
   MPI_Type_create_struct(
       2, // count of unique blocks
-      (int[]){3, 2}, // block lengths 
+      (int[]){5, 2}, // block lengths 
       (MPI_Aint[]){offsetof(params_t, rows), offsetof(params_t, freq)}, // displacements
       (MPI_Datatype[]){MPI_UINT32_T, MPI_UINT8_T}, // datatypes
       &MPI_PARAM_STRUCT); // output (new datatype)
@@ -120,7 +99,7 @@ int main(int argc, char* argv[])
   if (rank == 0)
   {
     // broadcasts: 1) which init function to use. 2) send the seed if necessary / start reading + passing the file
-    gol = parse_args(argc, argv); 
+    gol = parse_args(argc, argv, size); 
   }
   else
   {
@@ -142,9 +121,14 @@ int main(int argc, char* argv[])
     // receive the rest of the params
     MPI_Bcast(params, 1, MPI_PARAM_STRUCT, 0, MPI_COMM_WORLD);
 
-    if(isRandom) gol = randomize(params);
+    if(isRandom) gol = gol_randomize(params);
     else gol = receive_file(params, rank);
   } 
+
+  params->lPartner = (((rank - 1) % size) + size) % size;
+  params->rPartner = (rank + 1) % size;
+  gol->my_rank = rank;
+  gol->size = size;
 
   // simulate stuff
   simulate(gol);
@@ -159,6 +143,7 @@ int main(int argc, char* argv[])
 
 // function definitions
 // private
+// DONE
 TYPE** init_grid(int rows, int cols)
 {
   // would be more "efficient" to do both arrays at the same time. 
@@ -182,6 +167,7 @@ typedef struct {
   uint32_t col;
 } pos_t;
 
+// DONE
 pos_t get_pos(uint32_t row, uint32_t col)
 {
   uint32_t block  = (row / sizeof(TYPE)) >> 3; // >> 3 multiplies sizeof(TYPE) by 8-bits per byte
@@ -191,7 +177,8 @@ pos_t get_pos(uint32_t row, uint32_t col)
 }
 
 // public
-gol_t* send_file(param_t *params, char *filepath, uint8_t size)
+// DONE
+gol_t* send_file(params_t *params, char *filepath, uint8_t size)
 {
   // TODO I should check if this succeeds
   FILE* file = fopen(filepath, "r");
@@ -219,7 +206,8 @@ gol_t* send_file(param_t *params, char *filepath, uint8_t size)
   MPI_Bcast(&cmd, 1, MPI_INIT_INFO, 0, MPI_COMM_WORLD);
 }
 
-gol_t* receive_file(param_t *params, uint8_t rank)
+// DONE
+gol_t* receive_file(params_t *params, uint8_t rank)
 {
   gol_t* gol = malloc(sizeof(*gol));
 
@@ -239,7 +227,8 @@ gol_t* receive_file(param_t *params, uint8_t rank)
   }
 }
 
-gol_t* randomize(param_t *params)
+// DONE
+gol_t* gol_randomize(params_t *params)
 {
   gol_t* gol = malloc(sizeof(*gol));
   gol->params = params;
@@ -250,14 +239,14 @@ gol_t* randomize(param_t *params)
   {
     for(uint32_t row = 0; row < params->rows; row++)
     {
-      pos_t pos = get_pos(row, col);
-      gol->write[pos.col][pos.block] |= (rand() % 2) << pos.shift;
+      write(gol, row, col, rand() % 2);
     }
   }
 
   return gol;
 }
 
+// DONE
 void swap(gol_t *gol)
 {
   TYPE** tmp = gol->write;
@@ -265,11 +254,8 @@ void swap(gol_t *gol)
   gol->read = tmp;
 }
 
-void start(timing_t *timing);
-void stop(timing_t *timing);
-void print_time(timing_t *timing);
-
-gol_t* parse_args(int argc, char* argv[], uint8_t size)
+// DONE
+gol_t* parse_args(int argc, char* argv[], uint32_t size)
 {
   // only running on rank0
   if(argc != 4)
@@ -322,8 +308,9 @@ gol_t* parse_args(int argc, char* argv[], uint8_t size)
 
   // create the params
   params_t* params = malloc(sizeof(*params));
-  params->rows = rows;
-  params->cols = cols;
+  // I think this could cause problems from integer division...
+  params->rows = rows / size; // how many each node should have
+  params->cols = cols / size;
   params->gens = (uint32_t) atoi(argv[1]);
   params->freq = (uint8_t)  atoi(argv[2]);
   params->verb = (uint8_t)  atoi(argv[3]);
@@ -334,17 +321,19 @@ gol_t* parse_args(int argc, char* argv[], uint8_t size)
 
   // get the gol_t back to rank 0
   if(isRandom)
-    return randomize(params);
+    return gol_randomize(params);
   else
     // communicate the file if I need to
     return send_file(params, filepath);
 }
 
+// DONE
 void free_params(params_t *params)
 {
   free(params);
 }
 
+// DONE
 void free_gol(gol_t *gol)
 {
   for(int col = 0; col < gol->params->cols+2; col++)
@@ -359,14 +348,71 @@ void free_gol(gol_t *gol)
   free(gol);
 }
 
+// DONE?
 void print(gol_t* gol)
 {
+  if(gol->my_rank == 0)
+  {
+    // print row by row and recieve each row from the other ranks
+    MPI_Status status;
+    TYPE val;
+    for(uint32_t row = 0; row < gol->params->rows; row++)
+    {
+      // print my first row
+      for(uint32_t col = 0; col < gol->params->cols; col++)
+      {
+        printf("%d ", read(gol, row, col));
+      }
 
+      // read from the other nodes
+      for(uint8_t p = 1; p < gol->size; p++)
+      {
+        status.MPI_TAG = 1;
+        while(status.MPI_TAG) { // have it send a 0 when it's done
+          MPI_Recv(&val, 64, MPI_BYTE, p, 0, MPI_COMM_WORLD, &status);
+
+          for(uint16_t idx = 0; idx < (sizeof(TYPE)>>3); idx++)
+          {
+            printf("%d ", (val >> idx) & 0x01);
+          }
+        }
+      }
+
+      // end of row
+      printf("\n");
+    }
+
+  }
+  else 
+  {
+    // need to send all of my rows
+    TYPE val = 0;
+    for(uint32_t row = 0; row < gol->params->rows; row++)
+    {
+      for(uint32_t col = 0; col < gol->params->cols; col++)
+      {
+        if(col > 0 && col % (sizeof(TYPE)>>3) == 0)
+        {
+          MPI_Send(&val, 64, MPI_BYTE, 0, col + 1 == gol->cols, MPI_COMM_WORLD);
+          val = 0;
+        }
+        val |= read(gol, row, col) >> (col % (sizeof(TYPE)>>3));
+      }
+
+      if(val > 0)
+      {
+        // make sure everything gets sent
+        MPI_Send(&val, 64, MPI_BYTE, 0, 0, MPI_COMM_WORLD);
+      }
+
+    }
+  }
 
   // signal that I am done printing
 # pragma omp barrier
 }
 
+// DONE? 
 void simulate(gol_t* gol)
 {
 
@@ -376,10 +422,10 @@ void simulate(gol_t* gol)
     int rank = omp_get_thread_num();
 
     // define the block based on thread's # in the pool
-    uint32_t col_start = ...;
-    uint32_t row_start = ...;
-    uint32_t col_end = ...;
-    uint32_t row_end = ...;
+    uint32_t col_start = gol->params->cols * rank / size;
+    uint32_t row_start = gol->params->rows * rank / size;
+    uint32_t col_end = gol->params->cols * (rank+1) / size;
+    uint32_t row_end = gol->params->rows * (rank+1) / size;
 
     // start the "game"
     for(uint32_t gen = 0; gen < gol->params->gens; gen++)
@@ -390,12 +436,53 @@ void simulate(gol_t* gol)
       // update the halo
       for(uint32_t col = col_start; col < col_end; col++)
       {
-        pos_t top_row = get_pos(0, col);
-        pos_t bot_row = get_pos(gol->params->rows-1, col);
-
-        gol->write[
+        // does the top and bottom along the threads
+        write(gol, -1, col, read(gol, gol->params->rows-1, col));
+        write(gol, gol->params->rows, col, read(gol, 0, col));
       }
 
+      // construct the data to send to other nodes
+      if(rank == 0) {
+        // since I'm storing in column order,
+        // I just need to grab and send each outer column segment
+        // blocks (# of TYPE's required) * (# bytes per TYPE)
+        uint32_t blocks = ((gol->params->rows / sizeof(TYPE)) >> 3);
+        uint32_t bytes = blocks * sizeof(TYPE);
+
+        uint8_t lHaloBytes[bytes];
+        uint8_t rHaloBytes[bytes];
+
+        // I'm worried this will stall
+        MPI_Send(gol->read[0], bytes, MPI_BYTE, gol->params->lPartner, 0, MPI_COMM_WORLD);
+        MPI_Recv(rHaloBytes, bytes, MPI_BYTE, gol->params->rPartner, MPI_COMM_WORLD, MPI_IGNORE_STATUS);
+
+        MPI_Send(gol->read[gol->params->rows], bytes, MPI_BYTE, gol->params->rPartner, 0, MPI_COMM_WORLD);
+        MPI_Recv(lHaloBytes, bytes, MPI_BYTE, gol->params->lPartner, MPI_COMM_WORLD, MPI_IGNORE_STATUS);
+
+        // now I need to put it into my halo
+        uint32_t bytesPerBlock = sizeof(TYPE);
+        // for(uint32_t idx = 0; idx < bytes; idx++)
+        // {
+        //   uint32_t block = idx / bytesPerBlock;
+        //   // align shift to the 8 bytes
+        //   uint32_t shift = (idx >> 3) % bytesPerBlock;
+        //   gol->write[0][block] |= lHaloBytes[idx] >> shift;
+        //   gol->write[gol->params->rows][block] |=  rHaloBytes[idx] >> shift;
+        // }
+        for(uint32_t block = 0; block < blocks; block++)
+        {
+          memcpy(gol->write[0][block], lHaloBytes + bytesPerBlock, block * bytesPerBlock);
+          memcpy(gol->write[gol->params->rows][block], rHaloBytes + bytesPerBlock, block * bytesPerBlock);
+        }
+
+#       pragma omp barrier
+      } else {
+#       pragma omp barrier
+      }
+
+
+      // swap read and write
+      swap(gol);
 
       if(gol->params->freq > 0 && gen % gol->params->freq == 0) 
       {
@@ -408,12 +495,40 @@ void simulate(gol_t* gol)
         }
       }
 
-      
+      // loop over and update the array
+      for(uint32_t col = col_start; col < col_end; col++)
+      {
+        TYPE neighbors = _mm512_add_epi64( _mm512_add_epi64(gol->read[col-1], gol->read[col]), gol->read[col+1] );
+
+        for(uint32_t row = row_start; row < row_end; row++)
+        {
+          pos_t pos = get_pos(row, col);
+          uint8_t count = (neighbors >> pos.shift) & 0x03;
+          uint8_t alive = read(gol, row, col) << 2; // either 0x02 or 0x00
+
+          // alive & count == 2 or count == 3
+          if(alive & count) write(gol, row, col, 1);
+          else if (!alive && count == 3) write(gol, row, col, 1);
+          else write(gol, row, col, 0);
+        }
+      }
 
     } // end for
   }// end parallel
 
 }// end simulate
 
+// DONE
+void write(gol_t *gol, uint32_t row, uint32_t col, uint8_t val) 
+{
+  pos_t pos = get_pos(row, col);
+  gol->write[pos.col][pos.block] |= val << pos.shift;
+}
 
+// DONE
+uint8_t read(gol_t *gol, uint32_t row, uint32_t col)
+{
+  pos_t pos = get_pos(row, col);
+  return (uint8_t) ((gol->read[pos.col][pos.block] >> pos.shift) & 0x01);
+}
 
