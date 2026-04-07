@@ -30,6 +30,15 @@ __global__ void gpu_ln(float x, float *series, int N)
   }
 }
 
+void cpu_ln(float x, float *series, int N)
+{
+  float t = (x - 1.0f) / (x + 1.0f);
+  for(int k = 0; k < N; k++)
+  {
+    series[k] = powf(t, 2 * k + 1.0f) / (2 * k + 1.0f);
+  }
+}
+
 int main(int argc, char* argv[])
 {
   if(argc != 3) 
@@ -45,13 +54,14 @@ int main(int argc, char* argv[])
     printf("Error: ln(%f) = undefined\n", x);
     exit(0);
   }
-  else if(x < 1 || x > 2) {
-    printf("Error: Maclurian Series of %f is wrong\n", x);
-    exit(0);
-  }
+  //else if(x < 1 || x > 2) {
+  //  printf("Error: Maclurian Series of %f is wrong\n", x);
+  //  exit(0);
+  //}
 
   float *series = (float*)calloc(sizeof(float), cores);
   float *dseries;
+ 
   cudaMalloc( (void**)&dseries, sizeof(float)*cores);
 
   cudaMemcpy(dseries, series, sizeof(float)*cores, cudaMemcpyHostToDevice);
@@ -63,6 +73,8 @@ int main(int argc, char* argv[])
   cudaMemcpy(series, dseries, sizeof(float)*cores, cudaMemcpyDeviceToHost);
 
   printf("ln(%f) = %f\n", x, series[0]);
+  
+  //cpu_ln(x, series, cores);
 
   /* */
   float sum = 0.0f;
@@ -71,6 +83,7 @@ int main(int argc, char* argv[])
     sum += series[i];
     printf("%d: %f\t\t\tsum: %f\n", i, series[i], sum);
   }
+  sum *= 2;
   printf("ln(%f) = %f\n", x, sum);
   /**/
 
