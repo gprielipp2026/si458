@@ -1,6 +1,6 @@
 CC=gcc
 
-CFLAGS=-Wall -fopenmp
+CFLAGS=-Wall -fopenmp -mavx512f
 
 LDFLAGS=
 LDLIBS=
@@ -16,6 +16,6 @@ all: $(TGTS)
 	mpicc $(CFLAGS) $(LDFLAGS) $< -o $@ $(LDLIBS)
 
 clean:
-	$(RM) $(RM) $(TGTS) $(OBJS)
+	$(RM) $(RM) $(TGTS) $(OBJS) $(wildcard *.out)
 
 .phony: clean all
