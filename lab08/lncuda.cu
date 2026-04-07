@@ -58,7 +58,7 @@ int main(int argc, char* argv[])
   //  printf("Error: Maclurian Series of %f is wrong\n", x);
   //  exit(0);
   //}
-
+  
   float *series = (float*)calloc(sizeof(float), cores);
   float *dseries;
  
