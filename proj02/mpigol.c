@@ -65,7 +65,7 @@ uint8_t read(gol_t *gol, uint32_t row, uint32_t col);
 // main program
 int main(int argc, char* argv[])
 {
-  int rank, size;
+  int rank=-1, size=0;
   
   params_t *params;
   gol_t *gol;
@@ -81,8 +81,14 @@ int main(int argc, char* argv[])
 
   // init MPI
   fprintf(stdout, "[MAIN] Initializing MPI\n");
+  fprintf(stdout, "argv = [");
+  for(int i = 0; i < argc; i++)
+  {
+    fprintf(stdout, "%s, ", argv[i]);
+  }
+  fprintf(stdout, "]\n");
   fflush(stdout);
-  MPI_Init(NULL, NULL);
+  MPI_Init(&argc, &argv);
   MPI_Comm_rank(MPI_COMM_WORLD, &rank);
   MPI_Comm_size(MPI_COMM_WORLD, &size);
   fprintf(stdout, "[MAIN] MPI initialized - rank=%d, size=%d\n", rank, size);
@@ -107,6 +113,7 @@ int main(int argc, char* argv[])
       &MPI_INIT_INFO);
   MPI_Type_commit(&MPI_INIT_INFO); 
 
+  /*
   // 1. parse arguments & 2. parse inputs
   fprintf(stdout, "[MAIN] Starting parse_args phase (rank=%d)\n", rank);
   fflush(stdout);
@@ -187,14 +194,18 @@ int main(int argc, char* argv[])
   fflush(stdout);
   
   // print timing information
-  
+  */ 
   
   // finalize MPI
-  fprintf(stdout, "[MAIN] Rank %d finalizing MPI\n", rank);
-  fflush(stdout);
+    if(rank == 0) {
+      fprintf(stdout, "[MAIN] Rank %d finalizing MPI\n", rank);
+      fflush(stdout);
+    }
   MPI_Finalize();
-  fprintf(stdout, "[MAIN] Rank %d done\n", rank);
-  fflush(stdout);
+  if(rank == 0) {
+    fprintf(stdout, "[MAIN] Rank %d done\n", rank);
+    fflush(stdout);
+  }
   return 0;
 }
 
@@ -205,7 +216,7 @@ TYPE** init_grid(int rows, int cols)
 {
   fprintf(stdout, "[INIT_GRID] rows=%d cols=%d\n", rows, cols);
   fflush(stdout);
-  
+
   // would be more "efficient" to do both arrays at the same time. 
   // but, this effectively runs in the same "time" (big-O time at least).
 
@@ -215,14 +226,14 @@ TYPE** init_grid(int rows, int cols)
   int reduced_rows = ((rows + 2) + 255) / 256;  // Ceiling division: total rows/256
   fprintf(stdout, "[INIT_GRID] reduced_rows=%d (cols+2)=%d\n", reduced_rows, cols+2);
   fflush(stdout);
-  
+
   TYPE** grid = malloc(sizeof(TYPE*) * (cols+2));
   fprintf(stdout, "[INIT_GRID] allocated grid=%p\n", (void*)grid);
   fflush(stdout);
-  
+
   for(int col = 0; col < cols+2; col++)
   {
-    grid[col] = calloc(reduced_rows, sizeof(TYPE));
+    grid[col] = malloc(reduced_rows * sizeof(TYPE*));
     if(!grid[col]) {
       fprintf(stdout, "[INIT_GRID] ERROR: calloc failed for col=%d\n", col);
       fflush(stdout);
@@ -252,15 +263,15 @@ pos_t get_pos(uint32_t row, uint32_t col)
   // offset cycles 0-255 every 256 row_indices, so each block holds 256 rows
   uint32_t block  = row_index >> 8;  // row_index / 256
   uint32_t offset = (row_index % (sizeof(TYPE) << 2));  // 0-255
-  
+
   pos_t result = {.shift=offset<<1, .block=block, .col=col+1};
-  
+
   if(row < 1000 && col < 10) {  // Log only first few calls to avoid spam
     fprintf(stdout, "[GET_POS] row=%u col=%u -> block=%u shift=%u col=%u\n", 
-            row, col, result.block, result.shift, result.col);
+        row, col, result.block, result.shift, result.col);
     fflush(stdout);
   }
-  
+
   return result;
 }
 
@@ -515,7 +526,7 @@ void print(gol_t* gol)
 void simulate(gol_t* gol)
 {
   fprintf(stdout, "[SIMULATE] Starting simulation - rows=%d cols=%d gens=%d\n",
-          gol->params->rows, gol->params->cols, gol->params->gens);
+      gol->params->rows, gol->params->cols, gol->params->gens);
   fflush(stdout);
 
 # pragma omp parallel
@@ -533,7 +544,7 @@ void simulate(gol_t* gol)
     uint32_t row_end = gol->params->rows * (rank+1) / size;
 
     fprintf(stdout, "[SIMULATE] Thread %d: col_start=%u col_end=%u row_start=%u row_end=%u\n",
-            rank, col_start, col_end, row_start, row_end);
+        rank, col_start, col_end, row_start, row_end);
     fflush(stdout);
 
     // start the "game"
@@ -541,7 +552,7 @@ void simulate(gol_t* gol)
     {
       fprintf(stdout, "[SIMULATE] Thread %d: generation %u\n", rank, gen);
       fflush(stdout);
-      
+
       // sync all of the threads for work
 #     pragma omp barrier
 
@@ -620,13 +631,13 @@ void simulate(gol_t* gol)
         for(uint32_t row = row_start; row < row_end; row++)
         {
           pos_t pos = get_pos(row, col);
-          
+
           // If we've moved to a new block, recompute neighbors for the new block
           if(pos.block != current_block) {
             current_block = pos.block;
             neighbors = _mm512_add_epi64( _mm512_add_epi64(gol->read[col-1][current_block], gol->read[col][current_block]), gol->read[col+1][current_block] );
           }
-          
+
           uint64_t* neighbors_ptr = (uint64_t*)&neighbors;
           uint32_t element_idx = pos.shift / 64;  // Which uint64_t element (0-7)
           uint32_t bit_idx = pos.shift % 64;      // Which bit within that element (0-63)
@@ -649,51 +660,39 @@ void simulate(gol_t* gol)
 void write(gol_t *gol, uint32_t row, uint32_t col, uint8_t val) 
 {
   pos_t pos = get_pos(row, col);
-  
-  if(!gol || !gol->write || !gol->write[pos.col]) {
-    fprintf(stdout, "[WRITE] ERROR: Invalid pointers - gol=%p write=%p write[%u]=%p val=%d\n",
-            (void*)gol, gol?(void*)gol->write:NULL, pos.col, 
-            (gol && gol->write)?(void*)gol->write[pos.col]:NULL, val);
-    fflush(stdout);
-    return;
-  }
-  
-  uint64_t* write_ptr = (uint64_t*)&gol->write[pos.col][pos.block];
-  uint32_t element_idx = pos.shift / 64;
-  uint32_t bit_idx = pos.shift % 64;
-  
-  if(element_idx >= 8) {
-    fprintf(stdout, "[WRITE] ERROR: element_idx=%u out of range (max 7), shift=%u\n", element_idx, pos.shift);
-    fflush(stdout);
-    return;
-  }
-  
-  write_ptr[element_idx] |= ((uint64_t)val) << bit_idx;
+
+  __attribute__((aligned(64))) uint8_t data[64];
+  data[0] = val;
+
+  TYPE new = _mm512_slli_epi64(_mm512_load_epi64((TYPE*)data), pos.shift);
+  TYPE notNewAndOrig = _mm512_andnot_epi64(new, gol->write[pos.col][pos.block]);
+  gol->write[pos.col][pos.block] = _mm512_or_epi64(notNewAndOrig, new); 
 }
+/*
 
 // DONE
 uint8_t read(gol_t *gol, uint32_t row, uint32_t col)
 {
   pos_t pos = get_pos(row, col);
-  
+
   if(!gol || !gol->read || !gol->read[pos.col]) {
     fprintf(stdout, "[READ] ERROR: Invalid pointers - gol=%p read=%p read[%u]=%p\n",
-            (void*)gol, gol?(void*)gol->read:NULL, pos.col,
-            (gol && gol->read)?(void*)gol->read[pos.col]:NULL);
+        (void*)gol, gol?(void*)gol->read:NULL, pos.col,
+        (gol && gol->read)?(void*)gol->read[pos.col]:NULL);
     fflush(stdout);
     return 0;
   }
-  
+
   uint64_t* read_ptr = (uint64_t*)&gol->read[pos.col][pos.block];
   uint32_t element_idx = pos.shift / 64;
   uint32_t bit_idx = pos.shift % 64;
-  
+
   if(element_idx >= 8) {
     fprintf(stdout, "[READ] ERROR: element_idx=%u out of range (max 7), shift=%u\n", element_idx, pos.shift);
     fflush(stdout);
     return 0;
   }
-  
+
   return (read_ptr[element_idx] >> bit_idx) & 0x01;
 }
-
+*/

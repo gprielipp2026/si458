@@ -13,8 +13,7 @@ __global__ void gpu_ln(float x, float *series, int N)
   float term = powf(t, 2 * k + 1) / (2 * k + 1);
 
   *(series + k) = term;
-
-  // do some tricky stuff to add up all values (some sort of tree maybe)
+// do some tricky stuff to add up all values (some sort of tree maybe)
   //__syncthreads();
   
   // for now to test:
@@ -26,7 +25,7 @@ __global__ void gpu_ln(float x, float *series, int N)
       sum += series[i];
     }
     sum *= 2;
-   // series[0] = sum;
+    series[0] = sum;
   }
 }
 
@@ -61,31 +60,38 @@ int main(int argc, char* argv[])
   
   float *series = (float*)calloc(sizeof(float), cores);
   float *dseries;
- 
-  cudaMalloc( (void**)&dseries, sizeof(float)*cores);
 
-  cudaMemcpy(dseries, series, sizeof(float)*cores, cudaMemcpyHostToDevice);
-
-  int threadsPerBlock = 128; // have 64 FPUs, 2 threads per should be okay
-  int blocks = (cores + threadsPerBlock - 1) / threadsPerBlock;
-  gpu_ln<<< blocks, threadsPerBlock >>>(x, dseries, cores);
-
-  cudaMemcpy(series, dseries, sizeof(float)*cores, cudaMemcpyDeviceToHost);
-
-  printf("ln(%f) = %f\n", x, series[0]);
-  
-  //cpu_ln(x, series, cores);
-
-  /* */
-  float sum = 0.0f;
-  for(int i = 0; i < cores; i++)
+  int deviceCount = 0;
+  cudaError_t error = cudaGetDeviceCount(&deviceCount);
+  if (error == cudaSuccess && deviceCount > 0) 
   {
-    sum += series[i];
-    printf("%d: %f\t\t\tsum: %f\n", i, series[i], sum);
+    // GPU is available
+
+    cudaMalloc( (void**)&dseries, sizeof(float)*cores);
+
+    cudaMemcpy(dseries, series, sizeof(float)*cores, cudaMemcpyHostToDevice);
+
+    int threadsPerBlock = 128; // have 64 FPUs, 2 threads per should be okay
+    int blocks = (cores + threadsPerBlock - 1) / threadsPerBlock;
+    gpu_ln<<< blocks, threadsPerBlock >>>(x, dseries, cores);
+
+    cudaMemcpy(series, dseries, sizeof(float)*cores, cudaMemcpyDeviceToHost);
+
+    printf("ln(%f) = %f\n", x, series[0]);
+
   }
-  sum *= 2;
-  printf("ln(%f) = %f\n", x, sum);
-  /**/
+  else 
+  {
+    cpu_ln(x, series, cores);
+
+    float sum = 0.0f;
+    for(int i = 0; i < cores; i++)
+    {
+      sum += series[i];
+    }
+    sum *= 2;
+    printf("ln(%f) = %f\n", x, sum);
+  }
 
   return 0;
 }
