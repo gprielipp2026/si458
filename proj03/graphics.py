@@ -22,8 +22,8 @@ class WindowApp:
         self.mode = Modes.DEFAULT
         self.spos = (-1, -1)
         self.epos = (-1, -1)
-        self.topLeft = (0, 0)
-        self.botRight = (width, height)
+        self.botLeft = (0, 0)
+        self.topRight = (width, height)
 
         if not glfw.init():
             raise Exception(f'Could not start application "{name}"')
@@ -71,32 +71,33 @@ class WindowApp:
     # update the window by moving the top left and bottom right
     def pan(self):
         vect = (e-s for s,e in zip(self.spos, self.epos))
-        self.topLeft = tuple([el + v for el, v in zip(self.topLeft, vect)])
-        self.botRight = tuple([el + v for el, v in zip(self.botRight, vect)])
+        self.botLeft = tuple([el + v for el, v in zip(self.botLeft, vect)])
+        self.topRight = tuple([el + v for el, v in zip(self.topRight, vect)])
         
-        print(f'Pan event:\t{self.topLeft}\t{self.botRight}')
+        print(f'Pan event:\t{self.botLeft}\t{self.topRight}')
 
     # update the window by moving the top left and bottom right
     def select(self):
         if any([b < a for a,b in zip(self.spos, self.epos)]):
             self.spos, self.epos = self.epos, self.spos
         
-        self.topLeft = self.spos
-        self.botRight = self.epos
+        self.botLeft = self.spos
+        self.topRight = self.epos
 
-        print(f'Select event:\t{self.topLeft}\t{self.botRight}')
+        print(f'Select event:\t{self.botLeft}\t{self.topRight}')
 
     def zoom(self, dir):
         # translate cursor to center screen
         trans = (e-s for s, e in zip(self.cursor, (self.width/2.0, self.height/2.0)))
-        self.topLeft = tuple([el + v for el, v in zip(self.topLeft, trans)])
-        self.botRight = tuple([el + v for el, v in zip(self.botRight, trans)])
+        self.botLeft = tuple([el + v for el, v in zip(self.botLeft, trans)])
+        self.topRight = tuple([el + v for el, v in zip(self.topRight, trans)])
 
         # scale based on dir
-        self.topLeft = tuple([el + v for el, v in zip(self.topLeft, (self.scalingFactor * dir, self.scalingFactor * dir))])
-        self.botRight = tuple([el + v for el, v in zip(self.botRight, (-1 * self.scalingFactor * dir, -1 * self.scalingFactor * dir))])
+        scale = (self.scalingFactor * dir, self.scalingFactor * dir)
+        self.botLeft = tuple([el + v for el, v in zip(self.botLeft, scale)])
+        self.topRight = tuple([el - v for el, v in zip(self.topRight, scale)])
         
-        print(f'Zoom event:\t{self.topLeft}\t{self.botRight}')
+        print(f'Zoom event:\t{self.botLeft}\t{self.topRight}')
 
     def start(self):
         glfw.make_context_current(self.window)
@@ -109,7 +110,7 @@ class WindowApp:
         glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST)
 
         while not glfw.window_should_close(self.window):
-            pixels = self.updateFunc(self.topLeft, self.botRight)
+            pixels = self.updateFunc(self.botLeft, self.topRight)
 
             glClear(GL_COLOR_BUFFER_BIT)
 
@@ -126,23 +127,30 @@ class WindowApp:
             glEnd()
 
             if self.mode == Modes.PANNING:
+                xmin, ymin = self.spos
+                xmax, ymax = self.epos
+
+                xmin, xmax = xmin / self.width, xmax / self.width
+                ymin, ymax = ymin / self.height, ymax / self.height
+
                 glBegin(GL_LINES)
-                glVertex2f(*self.spos)
-                glVertex2f(*self.epos)
+                glVertex2f(xmin, ymin)
+                glVertex2f(xmax, ymax)
                 glEnd()
+
             elif self.mode == Modes.SELECTS:
-                xmin, ymin = self.topLeft
-                xmax, ymax = self.botRight
+                xmin, ymin = self.botLeft
+                xmax, ymax = self.topRight
 
                 xmin, xmax = xmin / self.width, xmax / self.width
                 ymin, ymax = ymin / self.height, ymax / self.height
 
                 glBegin(GL_QUADS)
 
-                glVertex2f(xmin, ymax) # BL
-                glVertex2f(xmax, ymax) # BR
-                glVertex2f(xmax, ymin) # TR
-                glVertex2f(xmin, ymin) # TL
+                glVertex2f(xmin, ymin) # BL
+                glVertex2f(xmax, ymin) # BR
+                glVertex2f(xmax, ymax) # TR
+                glVertex2f(xmin, ymax) # TL
 
                 glEnd()
 
@@ -162,17 +170,18 @@ class WindowApp:
 
 
 def colorSheet(width, height):
-    def update(tl, br):
+    def update(bl, tr):
         pixels = np.zeros((width, height, 3))
 
-        xmin, xmax = tl[0], br[0]
-        ymin, ymax = tl[1], br[1]
+        xmin, ymin = bl
+        xmax, ymax = tr
 
         # loop over each pixel
         for y in range(height):
             for x in range(width):
                 percX = x / float(width)
                 percY = y / float(height)
+
                 color = (int((xmax - xmin)*percX + xmin) % 255, int((ymax - ymin)*percY + ymin) % 255, 0)
 
                 pixels[y][x] = color
