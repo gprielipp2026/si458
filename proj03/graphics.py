@@ -1,15 +1,27 @@
+import os
+import ctypes
+
+try:
+ ctypes.CDLL('/usr/lib/x86_64-linux-gnu/libGL.so.1', mode=ctypes.RTLD_GLOBAL)
+except Exception as e:
+    print(e)
+
+os.environ['LIBGL_ALWAYS_SOFTWARE'] = '1'
+os.environ['GALLIUM_DRIVER'] = 'llvmpipe' # Extra safety for CPU-only systems
+# Disable any specific session type to let WSLg handle it
+if 'XDG_SESSION_TYPE' in os.environ:
+    del os.environ['XDG_SESSION_TYPE']
+
 from OpenGL.GLUT import *
 from OpenGL.GL import *
 import glfw
 import time
 from enum import Enum
-import os
 
 class Modes(Enum):
     DEFAULT = 1
     PANNING = 2
     SELECTS = 3
-
 
 class WindowApp:
     def __init__(self, width, height, updateFunc, name='Default Title', fps=24.0, scalingFactor=5.0):
@@ -29,9 +41,8 @@ class WindowApp:
         if not glfw.init():
             raise Exception(f'Could not start application "{name}"')
 
-        glfw.window_hint(glfw.CONTEXT_VERSION_MAJOR, 3)
-        glfw.window_hint(glfw.CONTEXT_VERSION_MINOR, 0)
-        # glfw.window_hint(glfw.OPENGL_PROFILE, glfw.OPENGL_COMPAT_PROFILE)
+        glfw.window_hint(glfw.CONTEXT_VERSION_MAJOR, 2)
+        glfw.window_hint(glfw.CONTEXT_VERSION_MINOR, 1)
 
         self.window = glfw.create_window(self.width, self.height, name, None, None)
 
@@ -117,10 +128,22 @@ class WindowApp:
         glEnable(GL_BLEND)
         glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA)
 
+        renderer = glGetString(GL_RENDERER)
+        if renderer:
+            renderer = renderer.decode('utf-8')
+        version = glGetString(GL_VERSION)
+        if version:
+            version = version.decode('utf-8')
+
+        print(f'Renderer: {renderer}')
+        print(f'Version: {version}')
+
         while not glfw.window_should_close(self.window):
-            pixels = self.updateFunc(self.botLeft, self.topRight)
+            pixels = np.ascontiguousarray(self.updateFunc(self.botLeft, self.topRight), dtype=np.uint8)
 
             glClear(GL_COLOR_BUFFER_BIT)
+
+            glColor4f(1.0, 1.0, 1.0, 1.0)
 
             if (err := glGetError()) != GL_NO_ERROR:
                 print(f'OpenGL Error: {err}')
@@ -151,11 +174,14 @@ class WindowApp:
                 glEnd()
 
             elif self.mode == Modes.SELECTS:
-                xmin, ymin = self.botLeft
-                xmax, ymax = self.topRight
+                x1, y1 = self.spos
+                x2, y2 = self.cursor
 
-                xmin, xmax = xmin / self.width, xmax / self.width
-                ymin, ymax = ymin / self.height, ymax / self.height
+                xmin, ymin = min(x1, x2), min(y1, y2)
+                xmax, ymax = max(x1, x2), max(y1, y2)
+
+                xmin, xmax = (xmin / self.width) * 2.0 - 1.0, (xmax / self.width) * 2.0 - 1.0
+                ymin, ymax = (ymin / self.height) * 2.0 - 1.0, (ymax / self.height) * 2.0 - 1.0
 
 
                 glColor4f(1.0, 0.0, 0.0, 0.6)
@@ -185,8 +211,6 @@ class WindowApp:
 
 def colorSheet(width, height):
     def update(bl, tr):
-        pixels = np.zeros((height, width, 3), dtype=np.uint8)
-
         xmin, ymin = bl
         xmax, ymax = tr
 
