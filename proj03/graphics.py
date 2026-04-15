@@ -3,6 +3,7 @@ from OpenGL.GL import *
 import glfw
 import time
 from enum import Enum
+import os
 
 class Modes(Enum):
     DEFAULT = 1
@@ -27,6 +28,10 @@ class WindowApp:
 
         if not glfw.init():
             raise Exception(f'Could not start application "{name}"')
+
+        glfw.window_hint(glfw.CONTEXT_VERSION_MAJOR, 3)
+        glfw.window_hint(glfw.CONTEXT_VERSION_MINOR, 0)
+        # glfw.window_hint(glfw.OPENGL_PROFILE, glfw.OPENGL_COMPAT_PROFILE)
 
         self.window = glfw.create_window(self.width, self.height, name, None, None)
 
@@ -63,41 +68,41 @@ class WindowApp:
 
     def handle_cursor(self, window, x, y):
         # print(f'Cursor event:\t{[x, y]}')
-        self.cursor = (x, y)
+        # because opengl uses (0,0) at bottom left
+        self.cursor = (x, self.height - y)
 
         if self.mode == Modes.PANNING or self.mode == Modes.SELECTS:
             self.epos = self.cursor
     
     # update the window by moving the top left and bottom right
     def pan(self):
-        vect = (e-s for s,e in zip(self.spos, self.epos))
+        vect = tuple((e-s for s,e in zip(self.spos, self.epos)))
         self.botLeft = tuple([el + v for el, v in zip(self.botLeft, vect)])
         self.topRight = tuple([el + v for el, v in zip(self.topRight, vect)])
         
-        print(f'Pan event:\t{self.botLeft}\t{self.topRight}')
+        print(f'Pan event:\t{vect}\t{self.botLeft}\t{self.topRight}')
 
     # update the window by moving the top left and bottom right
     def select(self):
-        if any([b < a for a,b in zip(self.spos, self.epos)]):
-            self.spos, self.epos = self.epos, self.spos
-        
-        self.botLeft = self.spos
-        self.topRight = self.epos
+        x1, y1 = self.spos
+        x2, y2 = self.epos
+        self.botLeft = (min(x1, x2), min(y1, y2))
+        self.topRight = (max(x1, x2), max(y1, y2))
 
         print(f'Select event:\t{self.botLeft}\t{self.topRight}')
 
     def zoom(self, dir):
         # translate cursor to center screen
-        trans = (e-s for s, e in zip(self.cursor, (self.width/2.0, self.height/2.0)))
+        trans = tuple((e-s for s, e in zip(self.cursor, (self.width/2.0, self.height/2.0))))
         self.botLeft = tuple([el + v for el, v in zip(self.botLeft, trans)])
         self.topRight = tuple([el + v for el, v in zip(self.topRight, trans)])
 
         # scale based on dir
-        scale = (self.scalingFactor * dir, self.scalingFactor * dir)
+        scale = tuple((self.scalingFactor * dir, self.scalingFactor * dir))
         self.botLeft = tuple([el + v for el, v in zip(self.botLeft, scale)])
         self.topRight = tuple([el - v for el, v in zip(self.topRight, scale)])
         
-        print(f'Zoom event:\t{self.botLeft}\t{self.topRight}')
+        print(f'Zoom event:\t{trans}\t{scale}\t{self.botLeft}\t{self.topRight}')
 
     def start(self):
         glfw.make_context_current(self.window)
@@ -109,10 +114,16 @@ class WindowApp:
         glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST)
         glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST)
 
+        glEnable(GL_BLEND)
+        glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA)
+
         while not glfw.window_should_close(self.window):
             pixels = self.updateFunc(self.botLeft, self.topRight)
 
             glClear(GL_COLOR_BUFFER_BIT)
+
+            if (err := glGetError()) != GL_NO_ERROR:
+                print(f'OpenGL Error: {err}')
 
             # Upload the updated NumPy array to the GPU texture
             glTexImage2D(GL_TEXTURE_2D, 0, GL_RGB, self.width, self.height, 0, GL_RGB, GL_UNSIGNED_BYTE, pixels)
@@ -130,9 +141,10 @@ class WindowApp:
                 xmin, ymin = self.spos
                 xmax, ymax = self.epos
 
-                xmin, xmax = xmin / self.width, xmax / self.width
-                ymin, ymax = ymin / self.height, ymax / self.height
+                xmin, xmax = (xmin / self.width) * 2.0 - 1.0, (xmax / self.width) * 2.0 - 1.0
+                ymin, ymax = (ymin / self.height) * 2.0 - 1.0, (ymax / self.height) * 2.0 - 1.0
 
+                glColor4f(0.0, 1.0, 0.0, 1.0)
                 glBegin(GL_LINES)
                 glVertex2f(xmin, ymin)
                 glVertex2f(xmax, ymax)
@@ -145,6 +157,8 @@ class WindowApp:
                 xmin, xmax = xmin / self.width, xmax / self.width
                 ymin, ymax = ymin / self.height, ymax / self.height
 
+
+                glColor4f(1.0, 0.0, 0.0, 0.6)
                 glBegin(GL_QUADS)
 
                 glVertex2f(xmin, ymin) # BL
@@ -171,20 +185,20 @@ class WindowApp:
 
 def colorSheet(width, height):
     def update(bl, tr):
-        pixels = np.zeros((width, height, 3))
+        pixels = np.zeros((height, width, 3), dtype=np.uint8)
 
         xmin, ymin = bl
         xmax, ymax = tr
 
         # loop over each pixel
-        for y in range(height):
-            for x in range(width):
-                percX = x / float(width)
-                percY = y / float(height)
-
-                color = (int((xmax - xmin)*percX + xmin) % 255, int((ymax - ymin)*percY + ymin) % 255, 0)
-
-                pixels[y][x] = color
+        # Create coordinate grids
+        x = np.linspace(xmin, xmax, width)
+        y = np.linspace(ymin, ymax, height)
+        xv, yv = np.meshgrid(x, y)
+        
+        pixels = np.zeros((height, width, 3), dtype=np.uint8)
+        pixels[:, :, 0] = (xv % 255).astype(np.uint8) # Red channel
+        pixels[:, :, 1] = (yv % 255).astype(np.uint8) # Green channel
 
         return pixels
 
