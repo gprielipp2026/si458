@@ -5,7 +5,7 @@
 __global__ void vector_add(float *c, float* a, float* b, int N) 
 {
   // gpu function  
-  int i = threadIdx.x + blockIdx.x;
+  int i = threadIdx.x + blockIdx.x * blockDim.x;
   c[i] = a[i] + b[i];
 }
 
