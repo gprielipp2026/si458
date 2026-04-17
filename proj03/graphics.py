@@ -90,6 +90,7 @@ class WindowApp:
     # update the window by moving the top left and bottom right
     def pan(self):
         vect = tuple((e-s for s,e in zip(self.spos, self.epos)))
+        vect = (vect[0] * -1, vect[1])
         self.botLeft = tuple([el + v for el, v in zip(self.botLeft, vect)])
         self.topRight = tuple([el + v for el, v in zip(self.topRight, vect)])
         
