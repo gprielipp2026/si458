@@ -24,7 +24,7 @@ class Modes(Enum):
     SELECTS = 3
 
 class WindowApp:
-    def __init__(self, width, height, updateFunc, name='Default Title', fps=24.0, scalingFactor=5.0):
+    def __init__(self, width, height, updateFunc, name='Default Title', fps=24.0, scalingFactor=1.01):
         self.width = width
         self.height = height
         self.updateFunc = updateFunc
@@ -61,13 +61,13 @@ class WindowApp:
         self.zoom(dir)
 
     def handle_mouse(self, window, button, action, mods):
-        print(f'Mouse event:\t{[button, action, mods]}')
         if action == glfw.PRESS:
-            self.spos = self.cursor
+            self.spos = self.epos = self.cursor
             if button == glfw.MOUSE_BUTTON_LEFT:
                 self.mode = Modes.SELECTS
             elif button == glfw.MOUSE_BUTTON_RIGHT:
                 self.mode = Modes.PANNING
+            print(f'Mouse event: <pressed>\t{self.cursor}')
 
         elif action == glfw.RELEASE:
             if self.mode == Modes.PANNING:
@@ -76,6 +76,8 @@ class WindowApp:
                 self.select()
             
             self.mode = Modes.DEFAULT
+            print(f'Mouse event: <released>\t{self.cursor}')
+
 
     def handle_cursor(self, window, x, y):
         # print(f'Cursor event:\t{[x, y]}')
@@ -97,23 +99,36 @@ class WindowApp:
     def select(self):
         x1, y1 = self.spos
         x2, y2 = self.epos
-        self.botLeft = (min(x1, x2), min(y1, y2))
-        self.topRight = (max(x1, x2), max(y1, y2))
+
+        minx, miny = self.botLeft
+        maxx, maxy = self.topRight
+        width = maxx - minx
+        height = maxy - miny
+
+        px = min(x1,x2) / width
+        py = min(y1,y2) / height
+        self.botLeft = (minx + width * px, miny + height * py)
+
+        px = 1 - (max(x1,x2) / width)
+        py = 1 - (max(y1,y2) / height)
+        self.topRight = (maxx - width * px, maxy - height * py)
 
         print(f'Select event:\t{self.botLeft}\t{self.topRight}')
 
     def zoom(self, dir):
-        # translate cursor to center screen
-        trans = tuple((e-s for s, e in zip(self.cursor, (self.width/2.0, self.height/2.0))))
-        self.botLeft = tuple([el + v for el, v in zip(self.botLeft, trans)])
-        self.topRight = tuple([el + v for el, v in zip(self.topRight, trans)])
+        x, y = self.cursor
+        minx, miny = self.botLeft
+        maxx, maxy = self.topRight
 
-        # scale based on dir
-        scale = tuple((self.scalingFactor * dir, self.scalingFactor * dir))
-        self.botLeft = tuple([el + v for el, v in zip(self.botLeft, scale)])
-        self.topRight = tuple([el - v for el, v in zip(self.topRight, scale)])
+        zoomF = self.scalingFactor if dir > 0 else (1.0 / self.scalingFactor)
+
+        colP = ((maxx - minx) / zoomF) / 2.0
+        rowP = ((maxy - miny) / zoomF) / 2.0
+
+        self.botLeft = (x - rowP, y - colP)
+        self.topRight = (x + rowP, y + colP)
         
-        print(f'Zoom event:\t{trans}\t{scale}\t{self.botLeft}\t{self.topRight}')
+        print(f'Zoom event:\t{self.botLeft}\t{self.topRight}')
 
     def start(self):
         glfw.make_context_current(self.window)
@@ -139,7 +154,16 @@ class WindowApp:
         print(f'Version: {version}')
 
         while not glfw.window_should_close(self.window):
-            pixels = np.ascontiguousarray(self.updateFunc(self.botLeft, self.topRight), dtype=np.uint8)
+            left = self.botLeft
+            right = self.topRight
+
+            if self.mode == Modes.PANNING:
+                vect = tuple((e-s for s,e in zip(self.spos, self.epos)))
+                vect = (vect[0] * -1, vect[1])
+                left = tuple([el + v for el, v in zip(self.botLeft, vect)])
+                right = tuple([el + v for el, v in zip(self.topRight, vect)])
+
+            pixels = np.ascontiguousarray(self.updateFunc(left, right), dtype=np.uint8)
 
             glClear(GL_COLOR_BUFFER_BIT)
 
@@ -160,20 +184,7 @@ class WindowApp:
             glTexCoord2f(0, 0); glVertex2f(-1, 1)  # Top Left
             glEnd()
 
-            if self.mode == Modes.PANNING:
-                xmin, ymin = self.spos
-                xmax, ymax = self.epos
-
-                xmin, xmax = (xmin / self.width) * 2.0 - 1.0, (xmax / self.width) * 2.0 - 1.0
-                ymin, ymax = (ymin / self.height) * 2.0 - 1.0, (ymax / self.height) * 2.0 - 1.0
-
-                glColor4f(0.0, 1.0, 0.0, 1.0)
-                glBegin(GL_LINES)
-                glVertex2f(xmin, ymin)
-                glVertex2f(xmax, ymax)
-                glEnd()
-
-            elif self.mode == Modes.SELECTS:
+            if self.mode == Modes.SELECTS:
                 x1, y1 = self.spos
                 x2, y2 = self.cursor
 
