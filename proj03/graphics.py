@@ -1,16 +1,16 @@
 import os
 import ctypes
 
-try:
- ctypes.CDLL('/usr/lib/x86_64-linux-gnu/libGL.so.1', mode=ctypes.RTLD_GLOBAL)
-except Exception as e:
-    print(e)
+#try:
+# ctypes.CDLL('/usr/lib/x86_64-linux-gnu/libGL.so.1', mode=ctypes.RTLD_GLOBAL)
+#except Exception as e:
+#    print(e)
 
-os.environ['LIBGL_ALWAYS_SOFTWARE'] = '1'
-os.environ['GALLIUM_DRIVER'] = 'llvmpipe' # Extra safety for CPU-only systems
+#os.environ['LIBGL_ALWAYS_SOFTWARE'] = '1'
+#os.environ['GALLIUM_DRIVER'] = 'llvmpipe' # Extra safety for CPU-only systems
 # Disable any specific session type to let WSLg handle it
-if 'XDG_SESSION_TYPE' in os.environ:
-    del os.environ['XDG_SESSION_TYPE']
+#if 'XDG_SESSION_TYPE' in os.environ:
+#    del os.environ['XDG_SESSION_TYPE']
 
 from OpenGL.GLUT import *
 from OpenGL.GL import *
@@ -239,6 +239,47 @@ def colorSheet(width, height):
 
     return update
 
+
+def mandel(w, h, maxiter=1000):
+    def update(bl, tr):
+        # xmin, xmax, ymin, ymax, w, h, maxiter
+        # Generate the complex plane
+        xmin, ymin = bl
+        xmax, ymax = tr
+
+        r1 = np.linspace(xmin, xmax, w)
+        r2 = np.linspace(ymin, ymax, h)
+        c = r1 + r2[:, None] * 1j
+        
+        # Initialize arrays
+        z = np.zeros_like(c)
+        mset = np.zeros(c.shape, dtype=np.int32)
+        mask = np.full(c.shape, True, dtype=bool)
+
+        for i in range(maxiter):
+            # Update only points that haven't escaped yet
+            z[mask] = z[mask]**2 + c[mask]
+            
+            # Check which points escaped in this iteration
+            # Using z.real**2 + z.imag**2 > 4 is faster than np.abs(z) > 2
+            escaped = (z.real**2 + z.imag**2) > 4.0
+            
+            # Record escape iteration for escaped points still in mask
+            mset[mask & escaped] = i
+            
+            # Remove escaped points from future calculations
+            mask[escaped] = False
+            
+            if not mask.any():
+                break
+                
+        # Map iterations to a simple brightness value
+        brightness = (mset / maxiter * 255).astype(np.uint8)
+        # Stack to create (h, w, 3) where R=G=B
+        rgb_array = np.stack([brightness] * 3, axis=-1)    
+        
+        return rgb_array
+    return update
 
 if __name__ == '__main__':
     import numpy as np
