@@ -17,6 +17,7 @@ from OpenGL.GL import *
 import glfw
 import time
 from enum import Enum
+import numpy as np
 
 class Modes(Enum):
     DEFAULT = 1
@@ -24,7 +25,7 @@ class Modes(Enum):
     SELECTS = 3
 
 class WindowApp:
-    def __init__(self, width, height, updateFunc, name='Default Title', fps=24.0, scalingFactor=1.01):
+    def __init__(self, width, height, updateFunc, name='Default Title', fps=24.0, scalingFactor=1.01, botLeft=None, topRight=None):
         self.width = width
         self.height = height
         self.updateFunc = updateFunc
@@ -35,8 +36,8 @@ class WindowApp:
         self.mode = Modes.DEFAULT
         self.spos = (-1, -1)
         self.epos = (-1, -1)
-        self.botLeft = (0, 0)
-        self.topRight = (width, height)
+        self.botLeft = (0, 0) if botLeft == None else botLeft
+        self.topRight = (width, height) if topRight == None else topRight
 
         if not glfw.init():
             raise Exception(f'Could not start application "{name}"')
@@ -89,8 +90,12 @@ class WindowApp:
     
     # update the window by moving the top left and bottom right
     def pan(self):
+        minx, miny = self.botLeft
+        maxx, maxy = self.topRight
+        scalex = (maxx - minx) / self.width
+        scaley = (maxy - miny) / self.height
         vect = tuple((e-s for s,e in zip(self.spos, self.epos)))
-        vect = (vect[0] * -1, vect[1])
+        vect = (vect[0] * -1 * scalex, vect[1] * scaley)
         self.botLeft = tuple([el + v for el, v in zip(self.botLeft, vect)])
         self.topRight = tuple([el + v for el, v in zip(self.topRight, vect)])
         
@@ -100,34 +105,32 @@ class WindowApp:
     def select(self):
         x1, y1 = self.spos
         x2, y2 = self.epos
+        sx, ex = min(x1, x2), max(x1,x2)
+        sy, ey = min(y1, y2), max(y1, y2)
 
         minx, miny = self.botLeft
         maxx, maxy = self.topRight
         width = maxx - minx
         height = maxy - miny
 
-        px = min(x1,x2) / width
-        py = min(y1,y2) / height
-        self.botLeft = (minx + width * px, miny + height * py)
-
-        px = 1 - (max(x1,x2) / width)
-        py = 1 - (max(y1,y2) / height)
-        self.topRight = (maxx - width * px, maxy - height * py)
+        self.botLeft = (sx / self.width * width + minx, sy / self.height * height + miny)
+        self.topRight = (ex / self.width * width + minx, ey / self.height * height + miny)
 
         print(f'Select event:\t{self.botLeft}\t{self.topRight}')
 
     def zoom(self, dir):
-        x, y = self.cursor
         minx, miny = self.botLeft
         maxx, maxy = self.topRight
 
         zoomF = self.scalingFactor if dir > 0 else (1.0 / self.scalingFactor)
 
+        cx = (maxx + minx) / 2.0
+        cy = (maxy + miny) / 2.0
         colP = ((maxx - minx) / zoomF) / 2.0
         rowP = ((maxy - miny) / zoomF) / 2.0
-
-        self.botLeft = (x - rowP, y - colP)
-        self.topRight = (x + rowP, y + colP)
+        print('DEBUG', cx, cy, colP, rowP)
+        self.botLeft = (cx-rowP, cy-colP)
+        self.topRight = (cx+rowP, cy+colP)
         
         print(f'Zoom event:\t{self.botLeft}\t{self.topRight}')
 
@@ -138,7 +141,7 @@ class WindowApp:
 
         texture = glGenTextures(1)
         glBindTexture(GL_TEXTURE_2D, texture)
-        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FIdLTER, GL_NEAREST)
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST)
         glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST)
 
         glEnable(GL_BLEND)
@@ -159,8 +162,12 @@ class WindowApp:
             right = self.topRight
 
             if self.mode == Modes.PANNING:
+                minx, miny = self.botLeft
+                maxx, maxy = self.topRight
+                scalex = (maxx - minx) / self.width  
+                scaley = (maxy - miny) / self.height 
                 vect = tuple((e-s for s,e in zip(self.spos, self.epos)))
-                vect = (vect[0] * -1, vect[1])
+                vect = (vect[0] * -1 * scalex, vect[1] * scaley)
                 left = tuple([el + v for el, v in zip(self.botLeft, vect)])
                 right = tuple([el + v for el, v in zip(self.topRight, vect)])
 
@@ -238,48 +245,6 @@ def colorSheet(width, height):
 
         return pixels
 
-    return update
-
-
-def mandel(w, h, maxiter=1000):
-    def update(bl, tr):
-        # xmin, xmax, ymin, ymax, w, h, maxiter
-        # Generate the complex plane
-        xmin, ymin = bl
-        xmax, ymax = tr
-
-        r1 = np.linspace(xmin, xmax, w)
-        r2 = np.linspace(ymin, ymax, h)
-        c = r1 + r2[:, None] * 1j
-        
-        # Initialize arrays
-        z = np.zeros_like(c)
-        mset = np.zeros(c.shape, dtype=np.int32)
-        mask = np.full(c.shape, True, dtype=bool)
-
-        for i in range(maxiter):
-            # Update only points that haven't escaped yet
-            z[mask] = z[mask]**2 + c[mask]
-            
-            # Check which points escaped in this iteration
-            # Using z.real**2 + z.imag**2 > 4 is faster than np.abs(z) > 2
-            escaped = (z.real**2 + z.imag**2) > 4.0
-            
-            # Record escape iteration for escaped points still in mask
-            mset[mask & escaped] = i
-            
-            # Remove escaped points from future calculations
-            mask[escaped] = False
-            
-            if not mask.any():
-                break
-                
-        # Map iterations to a simple brightness value
-        brightness = (mset / maxiter * 255).astype(np.uint8)
-        # Stack to create (h, w, 3) where R=G=B
-        rgb_array = np.stack([brightness] * 3, axis=-1)    
-        
-        return rgb_array
     return update
 
 if __name__ == '__main__':
